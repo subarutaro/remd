@@ -1,0 +1,21 @@
+lastx=-1
+lasty=0
+lastz=0
+
+dx=0
+dy=0
+
+deltax(x)=(dx = (x>lastx) ? x - lastx : dx, lastx = x, x - 0.5*dx)
+deltay(y)=(dy = (y>lasty) ? y - lasty : dy, lasty = y, y - 0.5*dy)
+deltaz(z)=(dz = z - lastz, lastz = z, $0==0 ? 1/0 : dz/sqrt(dy*dy+dx*dx))
+
+set xlabel "x"
+set ylabel "y"
+
+set xrange [-1:1]
+set yrange [-1:1]
+#set zrange [-2:2]
+
+#set ticslevel 0
+sp "test.dat" w l
+repl "test.dat" u 1:(deltay($2)):(deltaz($3))

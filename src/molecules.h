@@ -1,0 +1,169 @@
+#ifndef H_MOLECULES
+#define H_MOLECULES
+
+#include <cstdio>
+#include <cstdlib>
+#include <cmath>
+#include <cassert>
+
+#include <iostream>
+#include <fstream>
+#include <sstream>
+#include <iomanip>
+
+#include <vector>
+#include <string>
+
+#include "vector.h"
+#include "unit.h"
+#include "rotation.h"
+#include "force_calculator.h"
+//#include "io_manager.h"
+#include "parameter.h"
+#include "product.h"
+#include "variables.h"
+#include "integrator.h"
+
+class Molecules{
+ private:
+
+ public:
+  const int nmol;
+  const int natom;
+  const double dt,dthalf;
+  double T,P;
+
+  Molecule   *mlcl;
+  Atom       *atom;
+  Thermostat *tst;
+  Barostat   *bst;
+  MolTypeList mlist;
+  dvec3       L;
+  Property    prop;
+  Parameter   param;
+  ForceCalculator *fclcltr;
+
+  int mode;
+
+  int nthreads;
+
+  Molecules
+  (const Parameter _param)
+    :nmol(_param.nmol),natom(_param.natom),
+    dt(_param.dt*1e-15/unit_time), dthalf(_param.dt*1e-15/unit_time*0.5)
+  {
+    param = _param;
+
+    T = param.temperature/unit_temp;
+    P = param.pressure / unit_press;
+
+    mlcl = new Molecule[nmol];
+    atom = new Atom[natom];
+    tst  = new Thermostat(param.tstat_mass);
+    bst  = new Barostat(param.bstat_mass);
+
+    nthreads = param.nthreads;
+
+    //fclcltr = new ForceCalculator(param.rcut,param.kcut,param.alpha,param.nthreads);
+    fclcltr = new ForceCalculator(param);
+    //MakeMolTypeList();
+    MakeMolTypeList(param.input_prefix+param.mtl_in);
+    fclcltr->MakeParamList(mlist);
+
+    mode = (param.confined<<CSHIFT) + (param.pconstant<<PSHIFT) + (param.tconstant<<TSHIFT);
+    std::cout << "  mode: " << mode << std::endl;
+    std::cout << " Tmode: " << ((mode>>TSHIFT)&MASK);
+    std::cout << " Pmode: " << ((mode>>PSHIFT)&MASK);
+    std::cout << " Cmode: " << ((mode>>CSHIFT)&MASK);
+    std::cout << std::endl;
+  };
+
+  ~Molecules(){
+    delete fclcltr;
+    delete bst;
+    delete tst;
+    delete[] atom;
+    delete[] mlcl;
+  }
+
+  void InitializeProperty(){
+    CalcForcePot();
+    prop.gkT = 6.0*(double)nmol*T;
+    CalcProperties();
+    prop.H0  = prop.tot;
+    prop.ham = prop.tot - prop.H0;
+  };
+
+  void MakeMolTypeList();
+  void MakeMolTypeList(std::string);
+  void SetCubicFCC();
+  void KillMomentum();
+  void KillAngularMomentumInTube();
+  void SetMassCenterToSystemCenter();
+  void RandomVel();
+  void VelocityScaling();
+  void RandomAngularVel();
+  void ZeroAngularVel();
+  void AngVelocityScaling();
+  void ResetAngularMomentum();
+
+  void Sort();
+
+  void ConvertToAtoms();
+  void ConvertFromAtoms();
+
+  void CalcForcePot();
+  template <int> void D1();
+  template <int> void D3();
+  template <int> void D2();
+  template <int> void D4();
+  template <int> void D5();
+  template <int> void D6();
+
+  void ExecuteSteps();
+
+  dvec3  TranslationalEnergy();
+  double RotationalEnergy();
+  double ThermostatEnergy(const double);
+  double BarostatEnergy(const double);
+
+  dvec3 Momentum();
+  dvec3 RotationalMomentum();
+
+  void CalcProperties();
+  void PrintProperties(std::ostream &s){s << prop; s << " " << L[0]*L[1]*L[2] << std::endl;;};
+
+  //void OutputCDV(const std::string,const long);
+  //void OutputGRO(const std::string,const long,const dvec3);
+  //void UpdateOutputs(){iomngr->UpdateOutputs(mlcl,tst,bst,prop,L,mlist);};
+  //void WriteCDV(const long step){iomngr->WriteCDV(mlcl,mlist,L,step);};
+  //void WriteCheckPoint(){iomngr->WriteCheckPoint(mlcl,tst,bst,L,prop);};
+
+  //for remd
+  double GetPressure(){return P;};
+  double GetTemperature(){return T;};
+  void   SetPressure(double _P){P = _P;};
+  void   SetTemperature(double _T){T = _T; prop.gkT=6.0*(double)nmol*T;};
+  void   ChangeTemperature(double _T){
+    const double coef = sqrt(_T / T);
+    for(int i=0;i<nmol;i++){
+      mlcl[i].v *= coef;
+      mlcl[i].p *= coef;
+    }
+    tst->s *= coef;
+    SetTemperature(_T);
+    // update properties related to momentum
+    CalcProperties();
+    prop.H0 = prop.tot;
+    prop.ham = prop.tot - prop.H0;
+  };
+
+  double GetPotential(){return prop.pot;};
+  double GetKinetic(){return prop.kin;};
+  double GetVolume(){return L[0]*L[1]*L[2];};
+  double GetVirial(){return sum(prop.vir);}
+
+  void PrintAll(std::ostream&);
+};
+#endif
+
