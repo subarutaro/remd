@@ -1,0 +1,60 @@
+input_prefix  INPUT_DIR
+output_prefix OUTPUT_DIR
+
+#gro_in  gpu
+gro_out gpu
+#trr_in test
+trr_out gpu
+chk_in  gpu
+chk_out gpu
+cdv_out cdv/gpu
+
+nmol 150
+natom 600
+nsite 4
+dt    2.0
+rcut 8.655
+rswitch 6.655
+
+tconstant  1
+temp_max 400
+temp_min 200
+tstat_mass 0.5
+
+pconstant  2
+press_max 5000000000
+press_min 4000000000
+bstat_mass 0.05
+
+ninterval 100
+interval  100
+energy_interval 100
+snap_interval 1000
+chk_interval 10000
+
+nreplica 1
+ntemp  1
+npress 1
+
+energy_max 0.0
+energy_min -80.0
+
+volume_max 40.0
+volume_min 0.0
+
+gen_vel 0
+cond_mode 0
+restart 0
+init_scaling 1
+
+nthreads 1
+nprocs 1
+ngpus 1
+gpu_offset 0
+
+confined 1
+nfwall 65536
+wall_length 7.4
+sgm_wall 3.277
+eps_wall 0.3886
+rho_wall 0.38016
