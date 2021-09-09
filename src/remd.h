@@ -11,8 +11,9 @@
 #include "remdinfo.h"
 #include "wham.h"
 //#include <time_measure.h>
-
+#ifdef ENABLE_GPU
 #include "remdgpu.h"
+#endif
 #include "integrator.h"
 
 class REMD{
@@ -33,8 +34,9 @@ class REMD{
   Molecules **md      = nullptr;
   IOManager **iomngr  = nullptr;
   WHAM      *wham     = nullptr;
+#ifdef ENABLE_GPU
   REMDGPU   *mdgpu    = nullptr;
-
+#endif
   std::ostream *os_ene = nullptr;
   std::fstream *binary = nullptr;
 

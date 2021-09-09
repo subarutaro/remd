@@ -9,7 +9,6 @@ void Molecules::D1(){
   const double coef_xi = 0.25*si;
   //const double coef_tra = si*si*0.5;
   //double sum_tra = 0.0;
-  const double coef_rot = 2.0;
   double sum_rot = 0.0;
   dvec3 sum_Pv = 0.0;
   for(int i=0;i<nmol;i++){
@@ -31,25 +30,35 @@ void Molecules::D1(){
     //update molecule
     mlcl[i] = m;
     if(((MODE>>PSHIFT)&MASK)>0){
-      sum_Pv += m.v*m.v*Li*Li*m.m;
+      //sum_Pv += m.v*m.v*Li*Li*m.m;
+      sum_Pv[0] += m.m * m.v[0]*m.v[0];
+      sum_Pv[1] += m.m * m.v[1]*m.v[1];
+      sum_Pv[2] += m.m * m.v[2]*m.v[2];
     }
     if(((MODE>>TSHIFT)&MASK)==T_CONSTANT){
       sum_rot += xi*xi*m.i[0];
     }
-
   }
+  if(((MODE>>PSHIFT)&MASK)>0){
+    //sum_Pv += m.v*m.v*Li*Li*m.m;
+    sum_Pv[0] /= L[0]*L[0] * tst->s*tst->s;
+    sum_Pv[1] /= L[1]*L[1] * tst->s*tst->s;
+    sum_Pv[2] /= L[2]*L[2] * tst->s*tst->s;
+  }
+
   if(((MODE>>TSHIFT)&MASK)==T_CONSTANT){
-    tst->Ps += ( sum( TranslationalEnergy() ) + sum_rot*coef_rot - ( 1.0+log(tst->s) )*prop.gkT + prop.H0 ) * dt;
+    tst->Ps += ( sum( TranslationalEnergy() ) + 2.0*sum_rot - ( 1.0+log(tst->s) )*prop.gkT + prop.H0 ) * dt;
   }
   if(((MODE>>PSHIFT)&MASK)==1){
-    bst->Pv[0] += sum(sum_Pv)*Li[0]*Li[1]*Li[2]*si/3.0;
+    bst->Pv[0] += tst->s * sum(sum_Pv)/(Molecules::GetVolume()*3.0) * dt;
   }
   if(((MODE>>PSHIFT)&MASK)==2){
-    bst->Pv[2] += sum_Pv[2]*Li[2]*si;
+    bst->Pv[2] += tst->s * sum_Pv[2] / L[2] * dt;
+    //printf("(kin)= %lff\n",sum_Pv[2] / L[2]);
   }
   if(((MODE>>PSHIFT)&MASK)==3){
-    bst->Pv[0] += sum_Pv[0]*Li[0]*si;
-    bst->Pv[1] += sum_Pv[1]*Li[1]*si;
+    bst->Pv[0] += tst->s * sum_Pv[0] / L[0] * dt;
+    bst->Pv[1] += tst->s * sum_Pv[1] / L[1] * dt;
   }
 }
 
@@ -103,19 +112,26 @@ template <int MODE>
 void Molecules::D4(){
   //* for p constant
   if(((MODE>>PSHIFT)&MASK)==1){
-    tst->Ps -= 0.5*bst->Pv[0]*bst->Pv[0]/bst->W*dthalf;
-    double V = L[0]*L[1]*L[2];
+    if(((MODE>>TSHIFT)&MASK)==1){
+      tst->Ps -= 0.5*bst->Pv[0]*bst->Pv[0]/bst->W*dthalf;
+    }
+    double V = Molecules::GetVolume();
     L = powf(V + bst->Pv[0]*tst->s/bst->W*dthalf,1./3.);
   }
   if(((MODE>>PSHIFT)&MASK)==2){
-    tst->Ps -= 0.5*bst->Pv[2]*bst->Pv[2]/bst->W*dthalf;
-    L[2] += bst->Pv[2]*tst->s/bst->W*dthalf;
+    if(((MODE>>TSHIFT)&MASK)==1){
+      tst->Ps -= 0.5 * bst->Pv[2] * bst->Pv[2] / bst->W * dthalf;
+    }
+    L[2] += 0.5 * tst->s * bst->Pv[2] / bst->W * dthalf;
   }
   if(((MODE>>PSHIFT)&MASK)==3){
-    tst->Ps -= 0.5*(bst->Pv[0]*bst->Pv[0] + bst->Pv[1]*bst->Pv[1])/bst->W*dthalf;
+    if(((MODE>>TSHIFT)&MASK)==1){
+      tst->Ps -= 0.5*(bst->Pv[0]*bst->Pv[0] + bst->Pv[1]*bst->Pv[1])/bst->W*dthalf;
+    }
     L[0] += bst->Pv[0]*tst->s/bst->W*dthalf;
     L[1] += bst->Pv[1]*tst->s/bst->W*dthalf;
   }
+  //printf("(L.z,Pv.z,Ps,s)= %lf %lf %lf %lf\n",L[2],bst->Pv[2],tst->Ps,tst->s);
   //*/
 }
 
@@ -132,19 +148,20 @@ void Molecules::D5(){
   }
   if(((MODE>>TSHIFT)&MASK)==T_CONSTANT){
     tst->Ps -= prop.pot * dthalf;
-  }
-  if(((MODE>>PSHIFT)&MASK)>0){
-    tst->Ps -= (P*L[0]*L[1]*L[2])*dthalf;
+    if(((MODE>>PSHIFT)&MASK)>0){
+      tst->Ps -= (P*Molecules::GetVolume())*dthalf;
+    }
   }
   if(((MODE>>PSHIFT)&MASK)==1){
     bst->Pv[0] += (sum(prop.vir)/(3.0*L[0]*L[1]*L[2]) - P)*tst->s*dthalf;
   }
   if(((MODE>>PSHIFT)&MASK)==2){
-    bst->Pv[2] += (prop.vir[2]/L[2] - P)*tst->s*dthalf;
+    bst->Pv[2] += tst->s * (prop.vir[2]/L[2] - P*Molecules::GetBottomArea()) * dthalf;
+    //printf("(vir,P)= %lf %lf\n",prop.vir[2]/L[2],P*Molecules::GetBottomArea());
   }
   if(((MODE>>PSHIFT)&MASK)==3){
-    bst->Pv[0] += (prop.vir[0]/L[0] - P)*tst->s*dthalf;
-    bst->Pv[1] += (prop.vir[1]/L[1] - P)*tst->s*dthalf;
+    bst->Pv[0] += (prop.vir[0]/L[0] - P*L[2]*param.wall_length)*tst->s*dthalf;
+    bst->Pv[1] += (prop.vir[1]/L[1] - P*L[2]*param.wall_length)*tst->s*dthalf;
   }
 }
 
@@ -156,7 +173,7 @@ void Molecules::D6(){
     tst->Ps /= tmp;
   }
 }
-;
+
 void Molecules::ExecuteSteps(){
   for(int s=0;s<param.interval;s++){
 #define INTEGRATE(x)    \
@@ -172,12 +189,14 @@ void Molecules::ExecuteSteps(){
     CalcForcePot();	\
     D5<x>();		\
     D6<x>();
-
+    //printf("mode= %d %d %d\n",(mode>>TSHIFT)&MASK, (mode>>PSHIFT)&MASK, (mode>>CSHIFT)&MASK);
     switch(mode){
     case NVE:
       INTEGRATE(NVE);break;
     case NVT:
       INTEGRATE(NVT);break;
+    case NVTSCALE:
+      INTEGRATE(NVE);break;
     case NPH:
       INTEGRATE(NPH);break;
     case NPT:
@@ -194,6 +213,8 @@ void Molecules::ExecuteSteps(){
       INTEGRATE(NVE1D);break;
     case NVT1D:
       INTEGRATE(NVT1D);break;
+    case NVTSCALE1D:
+      INTEGRATE(NVE1D);break;
     case NPH1D:
       INTEGRATE(NPH1D);break;
     case NPT1D:

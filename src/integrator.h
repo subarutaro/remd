@@ -5,6 +5,7 @@
 
 #define E_CONSTANT 0
 #define T_CONSTANT 1
+#define T_SCALE 2
 
 #define V_CONSTANT 0
 #define P_CONSTANT 1

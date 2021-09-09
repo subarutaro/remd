@@ -68,9 +68,9 @@ class ForceCalculator{
 
   void SR(const Molecule*,Atom*,const dvec3,const int);
   void LR(Atom*,const dvec3,const int);
-  void Confined(Atom*,const dvec3,const int);
+  void Confined(Molecule*,Atom*,const MolTypeList,const dvec3,const int,Property&);
 
-  void Switching(Molecule*,Atom*,const MolTypeList,const dvec3,const int);
+  void Switching(Molecule*,Atom*,const MolTypeList,const dvec3,const int,Property&);
 };
 
 #endif

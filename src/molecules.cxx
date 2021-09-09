@@ -349,23 +349,29 @@ void Molecules::ConvertFromAtoms(){
       etmp += a.e;
       vtmp += a.v;
     }
+#ifndef SWITCHING
     mlcl[i].f = f;
+#endif
     mlcl[i].n = n;
   }
   //std::cout << "pot= " << tmp << std::endl;
+#ifdef SWITCHING
+  prop.pot = prop.lj + prop.clmb + prop.wall;
+#else
   prop.pot = etmp;
   prop.vir = vtmp;
+#endif
 }
 
 void Molecules::CalcForcePot(){
   ConvertToAtoms();
-#if 0
+#ifdef SWITCHING
+  fclcltr->Switching(mlcl,atom,mlist,L,nmol,prop);
+#else
   fclcltr->SR(mlcl,atom,L,natom);
   fclcltr->LR(atom,L,natom);
-#else
-  fclcltr->Switching(mlcl,atom,mlist,L,nmol);
 #endif
-  if(((mode>>CSHIFT)&MASK)>0) fclcltr->Confined(atom,L,natom);
+  if(((mode>>CSHIFT)&MASK)>0) fclcltr->Confined(mlcl,atom,mlist,L,nmol,prop);
   ConvertFromAtoms();
 }
 
@@ -375,14 +381,13 @@ dvec3 Molecules::TranslationalEnergy(){
   dvec3 kin = 0.0;
   for(int i=0;i<nmol;i++){
     const Molecule m = mlcl[i];
-    kin += m.v*m.v*m.m;
+    kin += (m.v*m.v)*m.m;
   }
   kin *= coef*coef*0.5;
   return kin;
 }
 
-double Molecules::RotationalEnergy
-(){
+double Molecules::RotationalEnergy(){
   const dvec3 coef = 0.25/(tst->s);
   dvec3 rot = 0.0;
   for(int i=0;i<nmol;i++){
@@ -407,12 +412,11 @@ double Molecules::BarostatEnergy(const double P){
     if(((mode>>CSHIFT)&MASK)==0)
       return 0.5*scalar_prod(bst->Pv,bst->Pv)/bst->W + P*L[0]*L[1]*L[2];
     if(((mode>>CSHIFT)&MASK)==1){
-      double wr = param.wall_length;
-      return 0.5*scalar_prod(bst->Pv,bst->Pv)/bst->W + P*M_PI*wr*wr*L[2];
+      return 0.5*bst->Pv[2]*bst->Pv[2]/bst->W + P*Molecules::GetVolume();
     }
     if(((mode>>CSHIFT)&MASK)==2){
-      double wr = param.wall_length;
-      return 0.5*scalar_prod(bst->Pv,bst->Pv)/bst->W + P*L[0]*L[1]*wr;
+      double wl = param.wall_length;
+      return 0.5*(bst->Pv[0]*bst->Pv[0] * bst->Pv[1]*bst->Pv[1])/bst->W + P*Molecules::GetVolume();
     }
   }else{
     return 0.0;
@@ -428,8 +432,7 @@ dvec3 Molecules::Momentum(){
   return tmp;
 }
 
-dvec3 Molecules::RotationalMomentum
-(){
+dvec3 Molecules::RotationalMomentum(){
   dvec3 tmp = 0.0;
   for(int i=0;i<nmol;i++){
     const Molecule m = mlcl[i];
@@ -450,7 +453,8 @@ void Molecules::CalcProperties(){
   prop.tra = sum(tmp);
   prop.rot = RotationalEnergy();
   prop.kin = prop.tra + prop.rot;
-  prop.Tave += prop.kin * unit_temp / (3.*nmol);
+  prop.T   = prop.kin * unit_temp / (3.*nmol);
+  prop.Tave += prop.T;
 
   prop.tsm = 0.5 * tst->Ps * tst->Ps / tst->Q;
   prop.tsp = prop.gkT * log(tst->s);
@@ -467,11 +471,11 @@ void Molecules::CalcProperties(){
   prop.tmo = Momentum();
   prop.rmo = RotationalMomentum();
 
-  const double volume = L[0]*L[1]*L[2];
-  prop.prs[0] = sum(tmp*2.0 + prop.vir) / (3.*volume) * unit_press;
-  prop.prs[1] = (tmp[0]*2.0 + prop.vir[0]) / volume * unit_press;
-  prop.prs[2] = (tmp[1]*2.0 + prop.vir[1]) / volume * unit_press;
-  prop.prs[3] = (tmp[2]*2.0 + prop.vir[2]) / volume * unit_press;
+  const double volume = Molecules::GetVolume();
+  prop.prs[0] = (tmp[0]*2.0 + prop.vir[0]) / volume * unit_press;
+  prop.prs[1] = (tmp[1]*2.0 + prop.vir[1]) / volume * unit_press;
+  prop.prs[2] = (tmp[2]*2.0 + prop.vir[2]) / volume * unit_press;
+  prop.prs[3] = sum(tmp*2.0 + prop.vir) / (3.*volume) * unit_press;
   prop.Pave += prop.prs;
   prop.nave++;
 }

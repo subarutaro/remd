@@ -637,7 +637,7 @@ void ForceCalculator::LR(Atom *atom,const dvec3 L,const int natom){
   //f.print();b.print();LR.print();
 }
 
-void ForceCalculator::Switching(Molecule *m,Atom *a,const MolTypeList mtl,const dvec3 L,const int nmol){
+void ForceCalculator::Switching(Molecule *m,Atom *a,const MolTypeList mtl,const dvec3 L,const int nmol,Property& prop){
   const double rc = rcut;
   const double rl = rswitch;
   const double rlc = rl - rc;
@@ -647,11 +647,13 @@ void ForceCalculator::Switching(Molecule *m,Atom *a,const MolTypeList mtl,const 
 
   double r01i,r02i,rs06i;
   dvec3 f_lj,fclmb[3];
-
+  prop.vir = 0.0;
+  prop.lj = prop.clmb = 0.0;
   int acount_i = 0;
   for(int i=0;i<nmol;i++){
     const dvec3 gr_i = m[i].r;
     const int   na_i = mtl[m[i].type].a.size();
+    m[i].f = 0.0;
     int acount_j = 0;
     for(int j=0;j<nmol;j++){
       const int na_j = mtl[m[i].type].a.size();
@@ -697,7 +699,11 @@ void ForceCalculator::Switching(Molecule *m,Atom *a,const MolTypeList mtl,const 
 	  rs06i = sgm[ai.t][aj.t]*r02i;
 	  rs06i = rs06i*rs06i*rs06i;
 
-	  double etmp = 4.0 * eps[ai.t][aj.t] * rs06i * (rs06i - 1.0) + qq*r01i;
+	  const double elj = 4.0 * eps[ai.t][aj.t] * rs06i * (rs06i - 1.0);
+	  const double ecl = qq*r01i;
+	  prop.lj   += sw*elj;
+	  prop.clmb += sw*ecl;
+	  const double etmp = elj + ecl;
 	  double ftmp = (48.0* eps[ai.t][aj.t] * rs06i * (rs06i - 0.5) * r02i + qq*r01i*r02i)*sw;
 	  e += etmp;
 	  f += r*ftmp;
@@ -706,52 +712,65 @@ void ForceCalculator::Switching(Molecule *m,Atom *a,const MolTypeList mtl,const 
 	  a[acount_i+ii].e += etmp * sw * 0.5;
 	  a[acount_i+ii].v += r*r*ftmp*0.5;
 	}// jj roop
-	m[i].f += f - dswr*e;
+	f -= dswr*e;
+	m[i].f += f;
+	prop.vir += f*gr;
 	a[acount_i].v -= dswr*gr*e;
       }// ii_roop
       acount_j += na_j;
     }// j roop
     acount_i += na_i;
   }// i roop
+  prop.vir *= 0.5;
+
+  prop.lj *= 0.5;
+  prop.clmb *= 0.5;
 }
 
-void ForceCalculator::Confined(Atom *a,const dvec3 L,const int natom){
+void ForceCalculator::Confined(Molecule* m,Atom *a,const MolTypeList mtl,const dvec3 L,const int nmol,Property& prop){
   const double dr = wall_length / (double)nfwall;
-  if(confined_dim == 1){
-    for(int i=0;i<natom;i++){
-      if(a[i].t==0){ // only for oxygen
-	dvec3  r_i = a[i].r - L*0.5;
+  int a_count = 0;
+  prop.wall = 0.0;
+  for(int i=0;i<nmol;i++){
+    for(int ii=0;ii<mtl[m[i].type].a.size();ii++){
+      if(a[a_count].t==0){ // only for oxygen
+	if(confined_dim == 1){
+	  dvec3  r_i = a[a_count].r - L*0.5;
 #ifdef TAKAIWA
-	double r01 = sqrt(r_i[2]*r_i[2] + r_i[1]*r_i[1]);
+	  double r01 = sqrt(r_i[2]*r_i[2] + r_i[1]*r_i[1]);
 #else
-	double r01 = sqrt(r_i[0]*r_i[0] + r_i[1]*r_i[1]);
+	  double r01 = sqrt(r_i[0]*r_i[0] + r_i[1]*r_i[1]);
 #endif
-	int index = (int)(r01/dr);
-	if(index>=nfwall) index = nfwall -1;
-	double f = (fwall[index+1][0]-fwall[index][0])/dr*(r01 - dr*index) + fwall[index][0];
-	double e = (fwall[index+1][1]-fwall[index][1])/dr*(r01 - dr*index) + fwall[index][1];
+	  int index = (int)(r01/dr);
+	  if(index>=nfwall) index = nfwall -1;
+	  double f = (fwall[index+1][0]-fwall[index][0])/dr*(r01 - dr*index) + fwall[index][0];
+	  double e = (fwall[index+1][1]-fwall[index][1])/dr*(r01 - dr*index) + fwall[index][1];
 #ifdef TAKAIWA
-	a[i].f[2] += f*r_i[2];
-	a[i].f[1] += f*r_i[1];
-#else
-	a[i].f[0] += f*r_i[0];
-	a[i].f[1] += f*r_i[1];
-	//a[i].e    += e;
+	  a[a_count].f[2] += f*r_i[2];
+	  a[a_count].f[1] += f*r_i[1];
+#ifdef SWITCHING
+	  m[i].f[2] += f*r_i[2];
+	  m[i].f[1] += f*r_i[1];
 #endif
+#else
+	  a[a_count].f[0] += f*r_i[0];
+	  a[a_count].f[1] += f*r_i[1];
+#ifdef SWITCHING
+	  m[i].f[0] += f*r_i[0];
+	  m[i].f[1] += f*r_i[1];
+#endif
+#endif
+	  a[a_count].e    += e;
+	  prop.wall += e;
+	}else if(confined_dim == 2){
+	  int index = abs((int)( (a[a_count].r[2] - 0.5*L[2]) / dr));
+	  if(index>=nfwall) index = nfwall -1;
+	  a[a_count].f[2] += ((fwall[index+1][0]-fwall[index][0])/dr*(a[a_count].r[2] - dr*index) + fwall[index][0])*a[i].r[2];
+	  a[a_count].e    += (fwall[index+1][1]-fwall[index][1])/dr*(a[a_count].r[2] - dr*index) + fwall[index][1];
+	}
       }
+      a_count++;
     }
-  }else if(confined_dim == 2){
-    for(int i=0;i<natom;i++){
-      if(a[i].t == 0){
-	int index = abs((int)( (a[i].r[2] - 0.5*L[2]) / dr));
-	if(index>=nfwall) index = nfwall -1;
-	a[i].f[2] += ((fwall[index+1][0]-fwall[index][0])/dr*(a[i].r[2] - dr*index) + fwall[index][0])*a[i].r[2];
-	a[i].e    += (fwall[index+1][1]-fwall[index][1])/dr*(a[i].r[2] - dr*index) + fwall[index][1];
-      }
-    }
-  }else{
-    std::cerr << "error: undefined confined dimension" << std::endl;
-    exit(EXIT_FAILURE);
- }
+  }
 }
 

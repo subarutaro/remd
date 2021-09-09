@@ -160,8 +160,29 @@ class Molecules{
 
   double GetPotential(){return prop.pot;};
   double GetKinetic(){return prop.kin;};
-  double GetVolume(){return L[0]*L[1]*L[2];};
+  double GetVolume(){
+    if(param.confined == 1){
+      return GetBottomArea() * L[2];
+    }else if (param.confined == 2){
+      const double wl = param.wall_length * 1e-10 / unit_length;
+      return L[0] * L[1] * wl;
+    }else{
+      return L[0]*L[1]*L[2];
+    }
+  };
+  double GetBottomArea(){
+    if(param.confined == 1){
+      const double sigma_c = 3.4; // angstrom
+      const double wl = (param.wall_length * 1e-10 / unit_length - 0.5*sigma_c);
+      return M_PI * wl * wl;
+    }else{
+      fprintf(stderr,"error: do not use GetBottomArea for not-1D confined system");
+      exit(EXIT_FAILURE);
+    }
+  };
   double GetVirial(){return sum(prop.vir);}
+  double GetHamiltonian(){return prop.tot;};
+  Property GetProperty(){return prop;}
 
   void PrintAll(std::ostream&);
 };

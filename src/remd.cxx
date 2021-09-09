@@ -90,11 +90,14 @@ REMD::REMD(){
     md[i]->PrintProperties(std::cout);
   }
   //*/
+#ifdef ENABLE_GPU
   ngpus = param.ngpus;
   if(ngpus>0){
     mdgpu = new REMDGPU(md,nreplica);
   }
-
+#else
+  ngpus = 0;
+#endif
   snap_interval   = param.snap_interval;
   chk_interval    = param.chk_interval;
   energy_interval = param.energy_interval;
@@ -214,20 +217,31 @@ REMD::~REMD(){
     }
     delete[] md;
   }
+#ifdef ENABLE_GPU
   if(mdgpu != nullptr) delete mdgpu;
+#endif
 };
 
 void REMD::ExecuteMDs(){
   const I nreplica = remdinfo->GetNumReplica();
   if(ngpus>0){
+#ifdef ENABLE_GPU
     mdgpu->ExecuteSteps(remdinfo->temperature,remdinfo->pressure);
     for(int rep=0;rep<nreplica;++rep){
       ave[rep] = mdgpu->GetAverages(rep);
       pot[rep] = ave[rep].sum[Average::LJ] + ave[rep].sum[Average::CLMB] + ave[rep].sum[Average::WALL];
       vol[rep] = ave[rep].sum[Average::VOL];
     }
+#else
+    fprintf(stderr,"error: gpu is not enabled\n");
+    exit(EXIT_FAILURE);
+#endif
   }else{
     for(int rep=0;rep<nreplica;++rep){
+      if(param.tconstant == 2){
+	md[rep]->VelocityScaling();
+	md[rep]->AngVelocityScaling();
+      }
       md[rep]->ExecuteSteps();//interval is included in md class
       pot[rep] = md[rep]->GetPotential();
       vol[rep] = md[rep]->GetVolume();
@@ -275,6 +289,7 @@ void REMD::ExecuteREMD(){
       std::cout << " " << s;
       std::cout << " " << pot[rep];
       std::cout << " " << vol[rep];
+#ifdef ENABLE_GPU
       if(ngpus>0){
  	Average a = mdgpu->GetAverages(rep);
 	std::cout << " " << a.sum[Average::LJ];
@@ -283,7 +298,7 @@ void REMD::ExecuteREMD(){
 	std::cout << " " << a.sum[Average::T];
 	if(param.confined == 1){
 	  std::cout << " " << a.sum[Average::Pz];
-	}else if(param.confined = 2){
+	}else if(param.confined == 2){
 	  std::cout << " " << a.sum[Average::Px];
 	  std::cout << " " << a.sum[Average::Py];
 	}
@@ -293,16 +308,52 @@ void REMD::ExecuteREMD(){
 	std::cout << " " << a.sum[Average::TSTv];
 	if(param.confined == 1){
 	  std::cout << " " << a.sum[Average::BSTz];
-	}else if(param.confined = 2){
+	}else if(param.confined == 2){
 	  std::cout << " " << a.sum[Average::BSTx];
 	  std::cout << " " << a.sum[Average::BSTy];
 	}
 	std::cout << " " << a.sum[Average::DRF];
       }
+#else
+      md[rep]->CalcProperties();
+      const Property prop = md[rep]->GetProperty();
+      std::cout << " " << prop.lj;
+      std::cout << " " << prop.clmb;
+      std::cout << " " << prop.wall;
+      std::cout << " " << prop.T;
+      if(param.confined == 1){
+	std::cout << " " << prop.prs[2];
+      }else if(param.confined == 2){
+	std::cout << " " << prop.prs[0];
+	std::cout << " " << prop.prs[1];
+      }
+      std::cout << " " << prop.tra;
+      std::cout << " " << prop.rot;
+      //std::cout << " " << prop.kin;
+      //std::cout << " " << prop.tsm;
+      //std::cout << " " << prop.tsp;
+      //std::cout << " " << prop.tst;
+      std::cout << " " << md[rep]->tst->s;
+      std::cout << " " << md[rep]->tst->Ps;
+      if(param.confined == 1){
+	std::cout << " " << md[rep]->bst->Pv[2];
+      }else if(param.confined == 2){
+	std::cout << " " << md[rep]->bst->Pv[0];
+	std::cout << " " << md[rep]->bst->Pv[1];
+      }
+      std::cout << " " << prop.ham;
+      std::cout << " " << prop.Tave / (double)prop.nave;
+      if(param.confined == 1){
+	std::cout << " " << prop.Pave[2] / (double)prop.nave;
+      }else if(param.confined == 2){
+	std::cout << " " << prop.Pave[0] / (double)prop.nave;
+	std::cout << " " << prop.Pave[1] / (double)prop.nave;
+      }
+#endif
       std::cout << std::endl;
     }
 #endif
-    //OutputDebugInfo();
+    OutputDebugInfo();
     IncrementHistogram();
     OutputBinary();
 
@@ -319,7 +370,9 @@ void REMD::ExecuteREMD(){
     //OutputBinary();
     if(step%snap_interval==0){
       if(ngpus>0){
+#ifdef ENABLE_GPU
 	mdgpu->OutputCDV((param.output_prefix+param.cdv_out).c_str(),step/snap_interval,remdinfo->index);
+#endif
       }else{
 	for(int rep=0;rep<nreplica;++rep){
 	  iomngr[rep]->WriteCDV(md[rep],step/snap_interval);
@@ -327,8 +380,10 @@ void REMD::ExecuteREMD(){
       }
     }
     if(step%chk_interval==0){
+#ifdef ENABLE_GPU
       //mdgpu->OutputCheckPoint((param.output_prefix+param.chk_out).c_str(),remdinfo->index);
       if(ngpus>0) mdgpu->ConvertVariablesToHost(md);
+#endif
       for(int rep=0;rep<nreplica;++rep){
 	const int ind = remdinfo->GetIndex(rep);
 	iomngr[rep]->UpdateOutputs(md[ind]);
@@ -345,19 +400,21 @@ void REMD::ExecuteREMD(){
   }
 
   if(step_max > 0){
-  if(ngpus>0) mdgpu->ConvertVariablesToHost(md);
-  for(int rep=0;rep<nreplica;++rep){
-    const int ind = remdinfo->GetIndex(rep);
-    iomngr[rep]->UpdateOutputs(md[ind]);
+#ifdef ENABLE_GPU
+    if(ngpus>0) mdgpu->ConvertVariablesToHost(md);
+#endif
+    for(int rep=0;rep<nreplica;++rep){
+      const int ind = remdinfo->GetIndex(rep);
+      iomngr[rep]->UpdateOutputs(md[ind]);
 
-    iomngr[rep]->WriteCDV(md[rep],step/snap_interval);
-  }
-  //output result
-  remdinfo->OutputHistogram();
-  remdinfo->OutputAcceptRate();
-  remdinfo->OutputTunnelCount();
-  OutputEnergy();
-  OutputIndex();
+      iomngr[rep]->WriteCDV(md[rep],step/snap_interval);
+    }
+    //output result
+    remdinfo->OutputHistogram();
+    remdinfo->OutputAcceptRate();
+    remdinfo->OutputTunnelCount();
+    OutputEnergy();
+    OutputIndex();
   } // if step_max > 0
   ExecuteWHAM();
 }
@@ -769,8 +826,10 @@ void REMD::ExecuteWHAM(){
 
 void REMD::OutputBinary(){
   for(int rep=0;rep<remdinfo->GetNumReplica();rep++){
+#ifdef ENABLE_GPU
     const Average a = mdgpu->GetAverages(remdinfo->GetIndex(rep));
     binary[rep].write((char*)&a.sum,Average::NUM_ELEM*sizeof(double));
+#endif
   }
 }
 

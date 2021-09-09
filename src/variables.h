@@ -18,6 +18,7 @@ struct Property{
   double wall; // potential between confined moelcules and wall
 #endif
   double pot; // vdw + clmb;
+  double lj,clmb,wall;
   double tra; // translational kinetic energy
   double rot; // rotational kinetic energy
   double kin; // tra + rot
@@ -34,6 +35,7 @@ struct Property{
   dvec3  tmo; // tlanslational momentum
   dvec3  rmo; // rotational momentum
   dvec3  vir; // 3D virial
+  double T;
   dvec4  prs; // P,Pxx,Pyy,Pzz
 
   double Tave;
