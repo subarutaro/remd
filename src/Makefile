@@ -2,11 +2,8 @@ OMPPPATH=$(HOME)/software/ompp/0.8.
 OMPP=kinst-ompp
 OMPPFLAGS=-I
 
-CUDAPATH ?= /usr/local/cuda/6.5
-
 CC = gcc
 CXX = g++
-NVCC = $(CUDAPATH)/bin/nvcc
 #CC = kinst-ompp gcc
 #CXX = kinst-ompp g++
 
@@ -17,12 +14,28 @@ CFLAGS += -O2
 CFLAGS += -m64
 #CFLAGS += -DDEBUG
 
+CFLAGS += -DSWITCHING
+
 OMPFLAGS += -fopenmp
 #CFLAGS +=  -lpthread -lgomp -lcudart
 
 CXXFLAGS = -std=c++11
 
+PLUGIN_DIR = ../plugin
+INC = -I$(PLUGIN_DIR) -I../inc
+
+SRC=force_calculator.cxx integrator.cxx  main.cxx molecules.cxx remdinfo.cxx gro.cxx io_manager.cxx molecular_dynamics.cxx remd.cxx wham.cxx
+HED=force_calculator.h io_manager.h molecules.h remd.h rotation.h unit.h wham.h gro.h mdunit.h parameter.h timer.h variables.h integrator.h molecular_dynamics.h product.h remdinfo.h typedef.h vector.h
+
+DEP =$(SRC:.cxx=.d)
+#DEP+=$(CUSRC:.cu=.d)
+
+OBJ =$(SRC:.cxx=.o)
+
+ifeq ($(enable_gpu),yes)
+CUDAPATH ?= /usr/local/cuda-10.2
 NVCCFLAGS  = --ptxas-options=-v
+NVCC = $(CUDAPATH)/bin/nvcc
 #for Fermi GPUs
 #NVCCFLAGS += -gencode arch=compute_20,code=sm_20
 #for Kepler 6xx series
@@ -30,35 +43,34 @@ NVCCFLAGS  = --ptxas-options=-v
 #for Kepler titan and titan black
 #NVCCFLAGS += -gencode arch=compute_35,code=sm_35
 #for Maxwell 9xx
-NVCCFLAGS += -gencode arch=compute_52,code=sm_52
+#NVCCFLAGS += -gencode arch=compute_52,code=sm_52
 #for Pascal 10xx
 NVCCFLAGS += -gencode arch=compute_61,code=sm_61
 NVCCFLAGS += -rdc=true
-
+#NVCCFLAGS += -G
 NVCCFLAGS += -Xcompiler $(OMPFLAGS)
 
-#NVCCFLAGS += -G
+INC +=  -I$(CUDAPATH)/include 
 
-PLUGIN_DIR = ../plugin
+CUSRC=remdgpu.cu
+CUSRC+= bitonic_sort.cu  quicksort.cu sort.cu
+CUHED= reduce.cuh vector.cuh
+CUHED+= 4site.cuh bitonic_sort.cuh quicksort.cuh scan.cuh  sort.cuh
+HED+= remdgpu.h
+OBJ+=$(CUSRC:.cu=.o)
 
-INC = -I$(CUDAPATH)/include  -I$(PLUGIN_DIR) -I../inc
+.cu.o:	$(CUSRC) $(HED) $(CUHED)
+	$(NVCC) $(NVCCFLAGS) $(CFLAGS) $(CXXFLAGS) $(INC) -c $< -o $@
+else
+NVCC=$(CXX)
+NVCCFLAGS=$(OMPFLAGS)
+endif
 
 #SRC=$(shell ls *.cxx)
 #CUSRC=$(shell ls *.cu)
 #HED=$(shell ls *.h)
 #CUHED=$(shell ls *.cuh)
-SRC=force_calculator.cxx integrator.cxx  main.cxx molecules.cxx remdinfo.cxx gro.cxx io_manager.cxx molecular_dynamics.cxx remd.cxx wham.cxx
-CUSRC=remdgpu.cu
-CUSRC+= bitonic_sort.cu  quicksort.cu sort.cu
-HED=force_calculator.h io_manager.h molecules.h remd.h rotation.h unit.h wham.h gro.h mdunit.h parameter.h remdgpu.h timer.h variables.h integrator.h molecular_dynamics.h product.h remdinfo.h typedef.h vector.h
-CUHED= reduce.cuh vector.cuh
-CUHED+= 4site.cuh bitonic_sort.cuh quicksort.cuh scan.cuh  sort.cuh
 
-DEP =$(SRC:.cxx=.d)
-#DEP+=$(CUSRC:.cu=.d)
-
-OBJ =$(SRC:.cxx=.o)
-OBJ+=$(CUSRC:.cu=.o)
 
 TARGET=md.out
 
@@ -67,11 +79,9 @@ TARGET=md.out
 	$(CXX) $(CFLAGS) $(CXXFLAGS) $(OMPFLAGS) $(INC) -c -MMD -MP $< -o $@
 .c.o:	$(SRC) $(HED)
 	$(CC) $(CFLAGS) -c $< -o $@
-.cu.o:	$(CUSRC) $(HED) $(CUHED)
-	$(NVCC) $(NVCCFLAGS) $(CFLAGS) $(CXXFLAGS) $(INC) -c $< -o $@
 
 
- all:	$(TARGET)
+all:	$(TARGET)
 
 -include $(DEP)
 
