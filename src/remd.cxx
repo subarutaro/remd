@@ -237,6 +237,7 @@ void REMD::ExecuteMDs(){
     exit(EXIT_FAILURE);
 #endif
   }else{
+#pragma omp parallel for num_threads(param.nthreads)
     for(int rep=0;rep<nreplica;++rep){
       if(param.tconstant == 2){
 	md[rep]->VelocityScaling();
@@ -342,6 +343,7 @@ void REMD::ExecuteREMD(){
 	std::cout << " " << md[rep]->bst->Pv[1];
       }
       std::cout << " " << prop.ham;
+#if 0
       std::cout << " " << prop.Tave / (double)prop.nave;
       if(param.confined == 1){
 	std::cout << " " << prop.Pave[2] / (double)prop.nave;
@@ -349,6 +351,7 @@ void REMD::ExecuteREMD(){
 	std::cout << " " << prop.Pave[0] / (double)prop.nave;
 	std::cout << " " << prop.Pave[1] / (double)prop.nave;
       }
+#endif
 #endif
       std::cout << std::endl;
     }
@@ -462,7 +465,11 @@ void REMD::ReplicaExchange(){
     for(int i=0;i<nreplica;++i){
       if(remdinfo->GetIsExchanged(i)){
 	md[i]->ChangeTemperature(remdinfo->GetTemperature(i));
+	md[i]->KillMomentum();
 	md[i]->SetPressure(remdinfo->GetPressure(i));
+	// update hamiltonian for integration
+	md[i]->CalcProperties();
+	md[i]->UpdateHamiltonian();
       }
     }
   }

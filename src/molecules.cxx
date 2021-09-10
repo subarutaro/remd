@@ -169,7 +169,17 @@ void Molecules::KillMomentum(){
     m   += mlcl[i].m;
   }
   sum /= m;
-  for(int i=0;i<nmol;i++) mlcl[i].v -= sum;
+  if(param.confined == 1){
+    for(int i=0;i<nmol;i++) mlcl[i].v[2] -= sum[2];
+    KillAngularMomentumInTube();
+  }else if(param.confined == 2){
+    for(int i=0;i<nmol;i++){
+      mlcl[i].v[0] -= sum[0];
+      mlcl[i].v[1] -= sum[1];
+    }
+  }else{
+    for(int i=0;i<nmol;i++) mlcl[i].v -= sum;
+  }
 }
 
 void Molecules::KillAngularMomentumInTube(){
@@ -187,7 +197,8 @@ void Molecules::KillAngularMomentumInTube(){
     dvec3  r = (mlcl[i].r - 0.5) * L;
     double m = mlcl[i].m;
     double r02 = r[0]*r[0] + r[1]*r[1];
-    if(r02 != 0.0){
+    //if(r02 != 0.0){
+    if(r02 > 1.0){
       mlcl[i].v[0] += mom * r[1] / r02 * L[0] * tst->s;
       mlcl[i].v[1] -= mom * r[0] / r02 * L[1] * tst->s;
     }

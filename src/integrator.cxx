@@ -176,6 +176,10 @@ void Molecules::D6(){
 
 void Molecules::ExecuteSteps(){
   for(int s=0;s<param.interval;s++){
+    if(param.tconstant == 2){
+      VelocityScaling();
+      AngVelocityScaling();
+    }
 #define INTEGRATE(x)    \
     D6<x>();		\
     D5<x>();		\
@@ -219,10 +223,14 @@ void Molecules::ExecuteSteps(){
       INTEGRATE(NPH1D);break;
     case NPT1D:
       INTEGRATE(NPT1D);break;
+    case NPTSCALE1D:
+      INTEGRATE(NPH1D);break;
     case NAxyPzH1D:
       INTEGRATE(NAxyPzH1D);break;
     case NAxyPzT1D:
       INTEGRATE(NAxyPzT1D);break;
+    case NAxyPzTSCALE1D:
+      INTEGRATE(NAxyPzH1D);break;
     case NPxyLzH1D:
       INTEGRATE(NPxyLzH1D);break;
     case NPxyLzT1D:
@@ -235,6 +243,8 @@ void Molecules::ExecuteSteps(){
       INTEGRATE(NPH2D);break;
     case NPT2D:
       INTEGRATE(NPT2D);break;
+    case NPTSCALE2D:
+      INTEGRATE(NPH2D);break;
     case NAxyPzH2D:
       INTEGRATE(NAxyPzH2D);break;
     case NAxyPzT2D:

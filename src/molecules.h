@@ -131,6 +131,10 @@ class Molecules{
   dvec3 RotationalMomentum();
 
   void CalcProperties();
+  void UpdateHamiltonian(){
+    prop.H0  = prop.tot;
+    prop.ham = 0.0;
+  }
   void PrintProperties(std::ostream &s){s << prop; s << " " << L[0]*L[1]*L[2] << std::endl;;};
 
   //void OutputCDV(const std::string,const long);
@@ -147,15 +151,23 @@ class Molecules{
   void   ChangeTemperature(double _T){
     const double coef = sqrt(_T / T);
     for(int i=0;i<nmol;i++){
-      mlcl[i].v *= coef;
-      mlcl[i].p *= coef;
+      mlcl[i].v *= coef / tst->s;
+      mlcl[i].p *= coef / tst->s;
     }
-    tst->s *= coef;
+    tst->Ps *= coef;
+    if(param.pconstant == 1) bst->Pv[0] *= coef * tst->s;
+    if(param.pconstant == 2) bst->Pv[2] *= coef * tst->s;
+    if(param.pconstant == 3){
+      bst->Pv[0] *= coef * tst->s;
+      bst->Pv[1] *= coef * tst->s;
+    }
     SetTemperature(_T);
-    // update properties related to momentum
-    CalcProperties();
-    prop.H0 = prop.tot;
-    prop.ham = prop.tot - prop.H0;
+    //reset s
+    //without reset, s becomes smaller/larger for low/high temperature, and
+    //s sometimes becomes smaller/larger and smaller/larger with replica exchanges
+    tst->s = 1.0;
+    //tst->Ps = 0.0;
+    //bst->Pv = 0.0;
   };
 
   double GetPotential(){return prop.pot;};
