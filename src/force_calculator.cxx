@@ -687,7 +687,7 @@ void ForceCalculator::Switching(Molecule *m,Atom *a,const MolTypeList mtl,const 
 	dvec3 f = 0.0;
 	for(int jj=0;jj<na_j;jj++){
 	  const Atom aj = a[acount_j+jj];
-	  const float qq = q[ai.t] * q[aj.t];
+	  const double qq = q[ai.t] * q[aj.t];
 	  dvec3 r = ai.r - aj.r;
 	  for(int d=0;d<3;d++){
 	    if(r[d] >= 0.5*L[d]) r[d] -= L[d];
@@ -726,6 +726,375 @@ void ForceCalculator::Switching(Molecule *m,Atom *a,const MolTypeList mtl,const 
   prop.lj *= 0.5;
   prop.clmb *= 0.5;
 }
+
+#define KERNEL_LJ_CLMB(a,b)						\
+  {									\
+  const double qq = charge[a] * charge[b];				\
+  double dx = ax[a] - ax[b];						\
+  double dy = ay[a] - ay[b];						\
+  double dz = az[a] - az[b];						\
+  if(dx >= 0.5*L[0]) dx -= L[0];					\
+  if(dx < -0.5*L[0]) dx += L[0];					\
+  if(dy >= 0.5*L[1]) dy -= L[1];					\
+  if(dy < -0.5*L[1]) dy += L[1];					\
+  if(dz >= 0.5*L[2]) dz -= L[2];					\
+  if(dz < -0.5*L[2]) dz += L[2];					\
+  r02 = dx*dx + dy*dy + dz*dz;						\
+  double r02i = 1.0/r02;							\
+  double r01i = sqrt(r02i);							\
+  double sigma = (as[a] + as[b]);					\
+  double rs06i = sigma * sigma * r02i;						\
+  rs06i = rs06i*rs06i*rs06i;						\
+  const double epsilon = ae[a] * ae[b];					\
+  const double elj = epsilon * rs06i * (rs06i - 1.0);			\
+  const double ecl = qq*r01i;						\
+  glj[i] += sw*elj;							\
+  gcl[i] += sw*ecl;							\
+  const double etmp = elj + ecl;					\
+  double ftmp = (12.0* epsilon * rs06i * (rs06i - 0.5) * r02i + qq*r01i*r02i)*sw; \
+  e += etmp;								\
+  fx += dx*ftmp;							\
+  fy += dy*ftmp;							\
+  fz += dz*ftmp;							\
+  afx[a] += dx*ftmp;							\
+  afy[a] += dy*ftmp;							\
+  afz[a] += dz*ftmp;							\
+  }
+#define KERNEL_LJ(a,b)							\
+  {									\
+  double dx = ax[a] - ax[b];						\
+  double dy = ay[a] - ay[b];						\
+  double dz = az[a] - az[b];						\
+  if(dx >= 0.5*L[0]) dx -= L[0];					\
+  if(dx < -0.5*L[0]) dx += L[0];					\
+  if(dy >= 0.5*L[1]) dy -= L[1];					\
+  if(dy < -0.5*L[1]) dy += L[1];					\
+  if(dz >= 0.5*L[2]) dz -= L[2];					\
+  if(dz < -0.5*L[2]) dz += L[2];					\
+  r02 = dx*dx + dy*dy + dz*dz;						\
+  double r02i = 1.0/r02;							\
+  double r01i = sqrt(r02i);							\
+  double sigma = (as[a] + as[b]);					\
+  double rs06i = sigma * sigma * r02i;						\
+  rs06i = rs06i*rs06i*rs06i;						\
+  const double epsilon = ae[a] * ae[b];					\
+  const double etmp = epsilon * rs06i * (rs06i - 1.0);			\
+  glj[i] += sw*etmp;							\
+  double ftmp = 12.0* epsilon * rs06i * (rs06i - 0.5) * r02i * sw;	\
+  e += etmp;								\
+  fx += dx*ftmp;							\
+  fy += dy*ftmp;							\
+  fz += dz*ftmp;							\
+  afx[a] += dx*ftmp;							\
+  afy[a] += dy*ftmp;							\
+  afz[a] += dz*ftmp;							\
+  }
+#define KERNEL_CLMB(a,b)						\
+  {									\
+  const double qq = charge[a] * charge[b];				\
+  double dx = ax[a] - ax[b];						\
+  double dy = ay[a] - ay[b];						\
+  double dz = az[a] - az[b];						\
+  if(dx >= 0.5*L[0]) dx -= L[0];					\
+  if(dx < -0.5*L[0]) dx += L[0];					\
+  if(dy >= 0.5*L[1]) dy -= L[1];					\
+  if(dy < -0.5*L[1]) dy += L[1];					\
+  if(dz >= 0.5*L[2]) dz -= L[2];					\
+  if(dz < -0.5*L[2]) dz += L[2];					\
+  r02 = dx*dx + dy*dy + dz*dz;						\
+  double r02i = 1.0/r02;						\
+  double r01i = sqrt(r02i);						\
+  const double etmp = qq*r01i;						\
+  gcl[i] += sw*etmp;							\
+  double ftmp = qq*r01i*r02i*sw;					\
+  e += etmp;								\
+  fx += dx*ftmp;							\
+  fy += dy*ftmp;							\
+  fz += dz*ftmp;							\
+  afx[a] += dx*ftmp;							\
+  afy[a] += dy*ftmp;							\
+  afz[a] += dz*ftmp;							\
+  }
+
+template <int nsite>
+void ForceCalculator::SwitchingTuning(Molecule *m,Atom *a,const MolTypeList mtl,const dvec3 L,const int nmol,Property& prop){
+  const double rc = rcut;
+  const double rl = rswitch;
+  const double rlc = rl - rc;
+  const double coef = 1.0 / (rlc*rlc*rlc*rlc*rlc);
+
+  const double rcutSq = rcut*rcut;
+
+  double gx[nmol], gy[nmol], gz[nmol];
+  double gfx[nmol],gfy[nmol],gfz[nmol];
+  double gvx[nmol],gvy[nmol],gvz[nmol];
+  double glj[nmol],gcl[nmol];
+  for(int i=0;i<nmol;i++){
+    gx[i] = m[i].r[0];
+    gy[i] = m[i].r[1];
+    gz[i] = m[i].r[2];
+    gfx[i] = gfy[i] = gfz[i] = 0.f;
+    gvx[i] = gvy[i] = gvz[i] = 0.f;
+    glj[i] = gcl[i] = 0.f;
+  }
+
+  const int natom = nsite * nmol;
+  double ax[natom],ay[natom],az[natom];
+  double ae[natom],as[natom];
+  double afx[natom],afy[natom],afz[natom];
+  double charge[natom];
+  int at[natom];
+  for(int i=0;i<natom;i++){
+    ax[i] = a[i].r[0];
+    ay[i] = a[i].r[1];
+    az[i] = a[i].r[2];
+    ae[i] = sqrt(4.0*eps[a[i].t][a[i].t]);
+    as[i] = 0.5*sqrt(sgm[a[i].t][a[i].t]);
+    afx[i] = afy[i] = afz[i] = 0.0;
+    charge[i] = q[a[i].t];
+    at[i] = a[i].t;
+  }
+
+  for(int i=0;i<nmol;i++){
+    for(int j=0;j<nmol;j++){
+      if(i == j) continue;
+
+      double dgx = (gx[i] - gx[j]) * L[0];
+      double dgy = (gy[i] - gy[j]) * L[1];
+      double dgz = (gz[i] - gz[j]) * L[2];
+      //if(dgx >= 0.5*L[0]) dgx -= L[0];
+      //if(dgx < -0.5*L[0]) dgx += L[0];
+      //if(dgy >= 0.5*L[1]) dgy -= L[1];
+      //if(dgy < -0.5*L[1]) dgy += L[1];
+      if(dgz >= 0.5*L[2]) dgz -= L[2];
+      if(dgz < -0.5*L[2]) dgz += L[2];
+
+      double r02 = dgx*dgx + dgy*dgy + dgz*dgz;
+      if(r02 > rcutSq) continue; // skip molecule outside the cut-off radious
+      double r01 = sqrt(r02);
+      double sw = 1.0, dsw = 0.0;
+      if(r01 > rl){
+	const double r01c = r01 - rc;
+	const double r01l = r01 - rl;
+	sw  = coef*r01c*r01c*r01c*(10.0*r01l*r01l - 5.0*r01l*r01c + r01c*r01c);
+	dsw = coef*30.0*r01c*r01c*r01l*r01l;
+      }
+      double r01i = 1.0 / r01;
+      const double dswx = dgx*(dsw*r01i);
+      const double dswy = dgy*(dsw*r01i);
+      const double dswz = dgz*(dsw*r01i);
+      double fx,fy,fz,e;
+      if constexpr (nsite == 3){
+	fx = fy = fz = e = 0.0;
+	KERNEL_LJ_CLMB(3*i+0,3*j+0);
+	KERNEL_CLMB   (3*i+0,3*j+1);
+	KERNEL_CLMB   (3*i+0,3*j+2);
+	fx -= dswx*e;
+	fy -= dswy*e;
+	fz -= dswz*e;
+	gfx[i] += fx;
+	gfy[i] += fy;
+	gfz[i] += fz;
+	gvx[i] += fx*dgx;
+	gvy[i] += fy*dgy;
+	gvz[i] += fz*dgz;
+
+	fx = fy = fz = e = 0.0;
+	KERNEL_CLMB(3*i+1,3*j+0);
+	KERNEL_CLMB(3*i+1,3*j+1);
+	KERNEL_CLMB(3*i+1,3*j+2);
+	fx -= dswx*e;
+	fy -= dswy*e;
+	fz -= dswz*e;
+	gfx[i] += fx;
+	gfy[i] += fy;
+	gfz[i] += fz;
+	gvx[i] += fx*dgx;
+	gvy[i] += fy*dgy;
+	gvz[i] += fz*dgz;
+
+	fx = fy = fz = e = 0.0;
+	KERNEL_CLMB(3*i+2,3*j+0);
+	KERNEL_CLMB(3*i+2,3*j+1);
+	KERNEL_CLMB(3*i+2,3*j+2);
+	fx -= dswx*e;
+	fy -= dswy*e;
+	fz -= dswz*e;
+	gfx[i] += fx;
+	gfy[i] += fy;
+	gfz[i] += fz;
+	gvx[i] += fx*dgx;
+	gvy[i] += fy*dgy;
+	gvz[i] += fz*dgz;
+      }
+      if constexpr (nsite == 4){
+	fx = fy = fz = e = 0.0;
+	KERNEL_LJ(4*i+0,4*j+0);
+	fx -= dswx*e;
+	fy -= dswy*e;
+	fz -= dswz*e;
+	gfx[i] += fx;
+	gfy[i] += fy;
+	gfz[i] += fz;
+	gvx[i] += fx*dgx;
+	gvy[i] += fy*dgy;
+	gvz[i] += fz*dgz;
+
+	fx = fy = fz = e = 0.0;
+	KERNEL_CLMB(4*i+1,4*j+1);
+	KERNEL_CLMB(4*i+1,4*j+2);
+	KERNEL_CLMB(4*i+1,4*j+3);
+	fx -= dswx*e;
+	fy -= dswy*e;
+	fz -= dswz*e;
+	gfx[i] += fx;
+	gfy[i] += fy;
+	gfz[i] += fz;
+	gvx[i] += fx*dgx;
+	gvy[i] += fy*dgy;
+	gvz[i] += fz*dgz;
+
+	fx = fy = fz = e = 0.0;
+	KERNEL_CLMB(4*i+2,4*j+1);
+	KERNEL_CLMB(4*i+2,4*j+2);
+	KERNEL_CLMB(4*i+2,4*j+3);
+	fx -= dswx*e;
+	fy -= dswy*e;
+	fz -= dswz*e;
+	gfx[i] += fx;
+	gfy[i] += fy;
+	gfz[i] += fz;
+	gvx[i] += fx*dgx;
+	gvy[i] += fy*dgy;
+	gvz[i] += fz*dgz;
+
+	fx = fy = fz = e = 0.0;
+	KERNEL_CLMB(4*i+3,4*j+1);
+	KERNEL_CLMB(4*i+3,4*j+2);
+	KERNEL_CLMB(4*i+3,4*j+3);
+	fx -= dswx*e;
+	fy -= dswy*e;
+	fz -= dswz*e;
+	gfx[i] += fx;
+	gfy[i] += fy;
+	gfz[i] += fz;
+	gvx[i] += fx*dgx;
+	gvy[i] += fy*dgy;
+	gvz[i] += fz*dgz;
+      }
+      if constexpr (nsite == 5){
+	fx = fy = fz = e = 0.0;
+	KERNEL_LJ(5*i+0,5*j+0);
+	fx -= dswx*e;
+	fy -= dswy*e;
+	fz -= dswz*e;
+	gfx[i] += fx;
+	gfy[i] += fy;
+	gfz[i] += fz;
+	gvx[i] += fx*dgx;
+	gvy[i] += fy*dgy;
+	gvz[i] += fz*dgz;
+
+	fx = fy = fz = e = 0.0;
+	KERNEL_CLMB(5*i+1,5*j+1);
+	KERNEL_CLMB(5*i+1,5*j+2);
+	KERNEL_CLMB(5*i+1,5*j+3);
+	KERNEL_CLMB(5*i+1,5*j+4);
+	fx -= dswx*e;
+	fy -= dswy*e;
+	fz -= dswz*e;
+	gfx[i] += fx;
+	gfy[i] += fy;
+	gfz[i] += fz;
+	gvx[i] += fx*dgx;
+	gvy[i] += fy*dgy;
+	gvz[i] += fz*dgz;
+
+	fx = fy = fz = e = 0.0;
+	KERNEL_CLMB(5*i+2,5*j+1);
+	KERNEL_CLMB(5*i+2,5*j+2);
+	KERNEL_CLMB(5*i+2,5*j+3);
+	KERNEL_CLMB(5*i+2,5*j+4);
+	fx -= dswx*e;
+	fy -= dswy*e;
+	fz -= dswz*e;
+	gfx[i] += fx;
+	gfy[i] += fy;
+	gfz[i] += fz;
+	gvx[i] += fx*dgx;
+	gvy[i] += fy*dgy;
+	gvz[i] += fz*dgz;
+
+	fx = fy = fz = e = 0.0;
+	KERNEL_CLMB(5*i+3,5*j+1);
+	KERNEL_CLMB(5*i+3,5*j+2);
+	KERNEL_CLMB(5*i+3,5*j+3);
+	KERNEL_CLMB(5*i+3,5*j+4);
+	fx -= dswx*e;
+	fy -= dswy*e;
+	fz -= dswz*e;
+	gfx[i] += fx;
+	gfy[i] += fy;
+	gfz[i] += fz;
+	gvx[i] += fx*dgx;
+	gvy[i] += fy*dgy;
+	gvz[i] += fz*dgz;
+
+	fx = fy = fz = e = 0.0;
+	KERNEL_CLMB(5*i+4,5*j+1);
+	KERNEL_CLMB(5*i+4,5*j+2);
+	KERNEL_CLMB(5*i+4,5*j+3);
+	KERNEL_CLMB(5*i+4,5*j+4);
+	fx -= dswx*e;
+	fy -= dswy*e;
+	fz -= dswz*e;
+	gfx[i] += fx;
+	gfy[i] += fy;
+	gfz[i] += fz;
+	gvx[i] += fx*dgx;
+	gvy[i] += fy*dgy;
+	gvz[i] += fz*dgz;
+      }
+    }// j roop
+  }// i roop
+
+  prop.vir = 0.0;
+  prop.lj = prop.clmb = 0.0;
+  for(int i=0;i<nmol;i++){
+    m[i].f[0] = gfx[i];
+    m[i].f[1] = gfy[i];
+    m[i].f[2] = gfz[i];
+
+    prop.lj   += glj[i];
+    prop.clmb += gcl[i];
+
+    prop.vir[0] += gvx[i];
+    prop.vir[1] += gvy[i];
+    prop.vir[2] += gvz[i];
+  }
+  prop.lj *= 0.5;
+  prop.clmb *= 0.5;
+  prop.vir *= 0.5;
+
+  for(int i=0;i<natom;i++){
+    a[i].f[0] = afx[i];
+    a[i].f[1] = afy[i];
+    a[i].f[2] = afz[i];
+  }
+}
+#undef KERNEL_LJ_CLMB
+#undef KERNEL_CLMB
+
+void ForceCalculator::Switching3site(Molecule *m,Atom *a,const MolTypeList mtl,const dvec3 L,const int nmol,Property& prop){
+  SwitchingTuning<3>(m,a,mtl,L,nmol,prop);
+}
+void ForceCalculator::Switching4site(Molecule *m,Atom *a,const MolTypeList mtl,const dvec3 L,const int nmol,Property& prop){
+  SwitchingTuning<4>(m,a,mtl,L,nmol,prop);
+}
+void ForceCalculator::Switching5site(Molecule *m,Atom *a,const MolTypeList mtl,const dvec3 L,const int nmol,Property& prop){
+  SwitchingTuning<5>(m,a,mtl,L,nmol,prop);
+}
+
 
 void ForceCalculator::Confined(Molecule* m,Atom *a,const MolTypeList mtl,const dvec3 L,const int nmol,Property& prop){
   const double dr = wall_length / (double)nfwall;

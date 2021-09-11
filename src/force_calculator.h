@@ -71,6 +71,11 @@ class ForceCalculator{
   void Confined(Molecule*,Atom*,const MolTypeList,const dvec3,const int,Property&);
 
   void Switching(Molecule*,Atom*,const MolTypeList,const dvec3,const int,Property&);
+  template<int>
+  void SwitchingTuning(Molecule*,Atom*,const MolTypeList,const dvec3,const int,Property&);
+  void Switching3site(Molecule*,Atom*,const MolTypeList,const dvec3,const int,Property&);
+  void Switching4site(Molecule*,Atom*,const MolTypeList,const dvec3,const int,Property&);
+  void Switching5site(Molecule*,Atom*,const MolTypeList,const dvec3,const int,Property&);
 };
 
 #endif

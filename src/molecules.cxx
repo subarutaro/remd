@@ -375,15 +375,33 @@ void Molecules::ConvertFromAtoms(){
 }
 
 void Molecules::CalcForcePot(){
+  prof.beg(Profiler::M2A);
   ConvertToAtoms();
+  prof.end(Profiler::M2A);
 #ifdef SWITCHING
+  prof.beg(Profiler::Switching);
+#ifdef THREE_SITE
+  fclcltr->Switching3site(mlcl,atom,mlist,L,nmol,prop);
+#elif FOUR_SITE
+  fclcltr->Switching4site(mlcl,atom,mlist,L,nmol,prop);
+#elif FIVE_SITE
+  fclcltr->Switching5site(mlcl,atom,mlist,L,nmol,prop);
+#else
   fclcltr->Switching(mlcl,atom,mlist,L,nmol,prop);
+#endif
+  prof.end(Profiler::Switching);
 #else
   fclcltr->SR(mlcl,atom,L,natom);
   fclcltr->LR(atom,L,natom);
 #endif
+
+  prof.beg(Profiler::Wall);
   if(((mode>>CSHIFT)&MASK)>0) fclcltr->Confined(mlcl,atom,mlist,L,nmol,prop);
+  prof.end(Profiler::Wall);
+
+  prof.beg(Profiler::A2M);
   ConvertFromAtoms();
+  prof.end(Profiler::A2M);
 }
 
 dvec3 Molecules::TranslationalEnergy(){

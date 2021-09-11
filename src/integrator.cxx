@@ -180,19 +180,45 @@ void Molecules::ExecuteSteps(){
       VelocityScaling();
       AngVelocityScaling();
     }
-#define INTEGRATE(x)    \
-    D6<x>();		\
-    D5<x>();		\
-    D4<x>();		\
-    D3<x>();		\
-    D2<x>();		\
-    D1<x>();		\
-    D2<x>();		\
-    D3<x>();		\
-    D4<x>();		\
-    CalcForcePot();	\
-    D5<x>();		\
-    D6<x>();
+#define INTEGRATE(x)							\
+    prof.beg(Profiler::Total);						\
+    prof.beg(Profiler::D6);						\
+    D6<x>();								\
+    prof.end(Profiler::D6);						\
+    prof.beg(Profiler::D5);						\
+    D5<x>();								\
+    prof.end(Profiler::D5);						\
+    prof.beg(Profiler::D4);						\
+    D4<x>();								\
+    prof.end(Profiler::D4);						\
+    prof.beg(Profiler::D3);						\
+    D3<x>();								\
+    prof.end(Profiler::D3);						\
+    prof.beg(Profiler::D2);						\
+    D2<x>();								\
+    prof.end(Profiler::D2);						\
+    prof.beg(Profiler::D1);						\
+    D1<x>();								\
+    prof.end(Profiler::D1);						\
+    prof.beg(Profiler::D2);						\
+    D2<x>();								\
+    prof.end(Profiler::D2);						\
+    prof.beg(Profiler::D3);						\
+    D3<x>();								\
+    prof.end(Profiler::D3);						\
+    prof.beg(Profiler::D4);						\
+    D4<x>();								\
+    prof.end(Profiler::D4);						\
+    prof.beg(Profiler::CalcForce);					\
+    CalcForcePot();							\
+    prof.end(Profiler::CalcForce);					\
+    prof.beg(Profiler::D5);						\
+    D5<x>();								\
+    prof.end(Profiler::D5);						\
+    prof.beg(Profiler::D6);						\
+    D6<x>();								\
+    prof.end(Profiler::D6);						\
+    prof.end(Profiler::Total);						\
     //printf("mode= %d %d %d\n",(mode>>TSHIFT)&MASK, (mode>>PSHIFT)&MASK, (mode>>CSHIFT)&MASK);
     switch(mode){
     case NVE:

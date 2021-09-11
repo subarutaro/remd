@@ -23,6 +23,7 @@
 #include "product.h"
 #include "variables.h"
 #include "integrator.h"
+#include "profiler.h"
 
 class Molecules{
  private:
@@ -42,6 +43,8 @@ class Molecules{
   Property    prop;
   Parameter   param;
   ForceCalculator *fclcltr;
+
+  Profiler prof;
 
   int mode;
 
