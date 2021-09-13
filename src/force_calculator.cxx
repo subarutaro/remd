@@ -40,6 +40,7 @@ ForceCalculator::ForceCalculator
 }
 
 ForceCalculator::~ForceCalculator(){
+#ifdef __INTEL_COMPILER
   if(gx  != nullptr) _mm_free(gx);
   if(gy  != nullptr) _mm_free(gy);
   if(gz  != nullptr) _mm_free(gz);
@@ -59,7 +60,27 @@ ForceCalculator::~ForceCalculator(){
   if(as  != nullptr) _mm_free(as);
   if(ae  != nullptr) _mm_free(ae);
   if(aq  != nullptr) _mm_free(aq);
+#else
+  if(gx  != nullptr) delete[] gx;
+  if(gy  != nullptr) delete[] gy;
+  if(gz  != nullptr) delete[] gz;
+  if(gfx != nullptr) delete[] gfx;
+  if(gfy != nullptr) delete[] gfy;
+  if(gfz != nullptr) delete[] gfz;
+  if(gvx != nullptr) delete[] gvx;
+  if(gvy != nullptr) delete[] gvy;
+  if(gvz != nullptr) delete[] gvz;
 
+  if(ax  != nullptr) delete[] ax;
+  if(ay  != nullptr) delete[] ay;
+  if(az  != nullptr) delete[] az;
+  if(afx != nullptr) delete[] afx;
+  if(afy != nullptr) delete[] afy;
+  if(afz != nullptr) delete[] afz;
+  if(as  != nullptr) delete[] as;
+  if(ae  != nullptr) delete[] ae;
+  if(aq  != nullptr) delete[] aq;
+#endif
   free(kvec);
   free(fwall);
 }
@@ -1046,6 +1067,7 @@ void ForceCalculator::SwitchingTuning(Molecule* m,Atom* a,const MolTypeList mtl,
 #endif
 
   const int offset = ((nmol + nlane - 1)/nlane)*nlane;
+#ifdef __INTEL_COMPILER
   if(gx  == nullptr) gx  = (FP*)_mm_malloc(nmol*sizeof(FP),64);
   if(gy  == nullptr) gy  = (FP*)_mm_malloc(nmol*sizeof(FP),64);
   if(gz  == nullptr) gz  = (FP*)_mm_malloc(nmol*sizeof(FP),64);
@@ -1057,6 +1079,19 @@ void ForceCalculator::SwitchingTuning(Molecule* m,Atom* a,const MolTypeList mtl,
   if(gvz == nullptr) gvz = (FP*)_mm_malloc(nmol*sizeof(FP),64);
   if(glj == nullptr) glj = (FP*)_mm_malloc(nmol*sizeof(FP),64);
   if(gcl == nullptr) gcl = (FP*)_mm_malloc(nmol*sizeof(FP),64);
+#else
+  if(gx  == nullptr) gx  = new FP[nmol];
+  if(gy  == nullptr) gy  = new FP[nmol];
+  if(gz  == nullptr) gz  = new FP[nmol];
+  if(gfx == nullptr) gfx = new FP[nmol];
+  if(gfy == nullptr) gfy = new FP[nmol];
+  if(gfz == nullptr) gfz = new FP[nmol];
+  if(gvx == nullptr) gvx = new FP[nmol];
+  if(gvy == nullptr) gvy = new FP[nmol];
+  if(gvz == nullptr) gvz = new FP[nmol];
+  if(glj == nullptr) glj = new FP[nmol];
+  if(gcl == nullptr) gcl = new FP[nmol];
+#endif
   assert(gx  != nullptr);
   assert(gy  != nullptr);
   assert(gz  != nullptr);
@@ -1078,6 +1113,7 @@ void ForceCalculator::SwitchingTuning(Molecule* m,Atom* a,const MolTypeList mtl,
   }
 
   const int natom = nsite * offset;
+#ifdef __INTEL_COMPILER
   if(ax  == nullptr) ax  = (FP*)_mm_malloc(natom*sizeof(FP),64);
   if(ay  == nullptr) ay  = (FP*)_mm_malloc(natom*sizeof(FP),64);
   if(az  == nullptr) az  = (FP*)_mm_malloc(natom*sizeof(FP),64);
@@ -1087,6 +1123,17 @@ void ForceCalculator::SwitchingTuning(Molecule* m,Atom* a,const MolTypeList mtl,
   if(as  == nullptr) as  = (FP*)_mm_malloc(natom*sizeof(FP),64);
   if(ae  == nullptr) ae  = (FP*)_mm_malloc(natom*sizeof(FP),64);
   if(aq  == nullptr) aq  = (FP*)_mm_malloc(natom*sizeof(FP),64);
+#else
+  if(ax  == nullptr) ax  = new FP[natom];
+  if(ay  == nullptr) ay  = new FP[natom];
+  if(az  == nullptr) az  = new FP[natom];
+  if(afx == nullptr) afx = new FP[natom];
+  if(afy == nullptr) afy = new FP[natom];
+  if(afz == nullptr) afz = new FP[natom];
+  if(as  == nullptr) as  = new FP[natom];
+  if(ae  == nullptr) ae  = new FP[natom];
+  if(aq  == nullptr) aq  = new FP[natom];
+#endif
   assert(ax  != nullptr);
   assert(ay  != nullptr);
   assert(az  != nullptr);
@@ -1110,7 +1157,9 @@ void ForceCalculator::SwitchingTuning(Molecule* m,Atom* a,const MolTypeList mtl,
   }
 #ifdef INSERT_TIMER_FORCE
   prof.end(Profiler::Pre);
-#endif 
+#endif
+
+#ifdef __INTEL_COMPILER
   __assume(nlane%(64/sizeof(FP))==0);
   __assume_aligned(gx,64);
   __assume_aligned(gy,64);
@@ -1133,6 +1182,7 @@ void ForceCalculator::SwitchingTuning(Molecule* m,Atom* a,const MolTypeList mtl,
   __assume_aligned(as,64);
   __assume_aligned(ae,64);
   __assume_aligned(aq,64);
+#endif
 
 #ifdef INSERT_TIMER_FORCE
   prof.beg(Profiler::Force);

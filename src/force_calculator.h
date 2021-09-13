@@ -55,27 +55,32 @@ class ForceCalculator{
   int nthreads;
 
 #ifdef SWITCHING
-  __declspec(align(64)) FP *gx = nullptr;
-  __declspec(align(64)) FP *gy = nullptr;
-  __declspec(align(64)) FP *gz = nullptr;
-  __declspec(align(64)) FP *gfx = nullptr;
-  __declspec(align(64)) FP *gfy = nullptr;
-  __declspec(align(64)) FP *gfz = nullptr;
-  __declspec(align(64)) FP *gvx = nullptr;
-  __declspec(align(64)) FP *gvy = nullptr;
-  __declspec(align(64)) FP *gvz = nullptr;
-  __declspec(align(64)) FP *glj = nullptr;
-  __declspec(align(64)) FP *gcl = nullptr;
+#ifdef __INTEL_COMPILER
+#define ATTR_ALIGN __declspec(align(64))
+#else
+#define ATTR_ALIGN
+#endif
+  ATTR_ALIGN FP *gx = nullptr;
+  ATTR_ALIGN FP *gy = nullptr;
+  ATTR_ALIGN FP *gz = nullptr;
+  ATTR_ALIGN FP *gfx = nullptr;
+  ATTR_ALIGN FP *gfy = nullptr;
+  ATTR_ALIGN FP *gfz = nullptr;
+  ATTR_ALIGN FP *gvx = nullptr;
+  ATTR_ALIGN FP *gvy = nullptr;
+  ATTR_ALIGN FP *gvz = nullptr;
+  ATTR_ALIGN FP *glj = nullptr;
+  ATTR_ALIGN FP *gcl = nullptr;
 
-  __declspec(align(64)) FP *ax = nullptr;
-  __declspec(align(64)) FP *ay = nullptr;
-  __declspec(align(64)) FP *az = nullptr;
-  __declspec(align(64)) FP *afx = nullptr;
-  __declspec(align(64)) FP *afy = nullptr;
-  __declspec(align(64)) FP *afz = nullptr;
-  __declspec(align(64)) FP *as = nullptr;
-  __declspec(align(64)) FP *ae = nullptr;
-  __declspec(align(64)) FP *aq = nullptr;
+  ATTR_ALIGN FP *ax = nullptr;
+  ATTR_ALIGN FP *ay = nullptr;
+  ATTR_ALIGN FP *az = nullptr;
+  ATTR_ALIGN FP *afx = nullptr;
+  ATTR_ALIGN FP *afy = nullptr;
+  ATTR_ALIGN FP *afz = nullptr;
+  ATTR_ALIGN FP *as = nullptr;
+  ATTR_ALIGN FP *ae = nullptr;
+  ATTR_ALIGN FP *aq = nullptr;
 #endif
 
   std::string prefix;
