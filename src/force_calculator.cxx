@@ -1231,9 +1231,6 @@ void ForceCalculator::SwitchingTuning(Molecule* m,Atom* a,const MolTypeList mtl,
       s_i[d] =  as[i + d*offset];
       afx_i[d] = afy_i[d] = afz_i[d] = ZERO;
     }
-#ifdef INSERT_TIMER_FORCE
-    prof.beg(Profiler::Force);
-#endif
     for(int jj=js; jj<=je; jj++){
       const int j = jj%nmol;
       INNER_MOST_LOOP;
@@ -1251,9 +1248,6 @@ void ForceCalculator::SwitchingTuning(Molecule* m,Atom* a,const MolTypeList mtl,
     gvz[i] = gvz_i;
     gcl[i] = gcl_i;
     glj[i] = glj_i;
-#ifdef INSERT_TIMER_FORCE
-    prof.end(Profiler::Force);
-#endif
   }// i loop
 #ifdef INSERT_TIMER_FORCE
   prof.end(Profiler::Force);
