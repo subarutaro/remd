@@ -1046,17 +1046,17 @@ void ForceCalculator::SwitchingTuning(Molecule* m,Atom* a,const MolTypeList mtl,
 #endif
 
   const int offset = ((nmol + nlane - 1)/nlane)*nlane;
-  if(gx  == nullptr) gx  = (FP*)_mm_malloc(nmol*sizeof(FP),64);;
-  if(gy  == nullptr) gy  = (FP*)_mm_malloc(nmol*sizeof(FP),64);;
-  if(gz  == nullptr) gz  = (FP*)_mm_malloc(nmol*sizeof(FP),64);;
-  if(gfx == nullptr) gfx = (FP*)_mm_malloc(nmol*sizeof(FP),64);;
-  if(gfy == nullptr) gfy = (FP*)_mm_malloc(nmol*sizeof(FP),64);;
-  if(gfz == nullptr) gfz = (FP*)_mm_malloc(nmol*sizeof(FP),64);;
-  if(gvx == nullptr) gvx = (FP*)_mm_malloc(nmol*sizeof(FP),64);;
-  if(gvy == nullptr) gvy = (FP*)_mm_malloc(nmol*sizeof(FP),64);;
-  if(gvz == nullptr) gvz = (FP*)_mm_malloc(nmol*sizeof(FP),64);;
-  if(glj == nullptr) glj = (FP*)_mm_malloc(nmol*sizeof(FP),64);;
-  if(gcl == nullptr) gcl = (FP*)_mm_malloc(nmol*sizeof(FP),64);;
+  if(gx  == nullptr) gx  = (FP*)_mm_malloc(nmol*sizeof(FP),64);
+  if(gy  == nullptr) gy  = (FP*)_mm_malloc(nmol*sizeof(FP),64);
+  if(gz  == nullptr) gz  = (FP*)_mm_malloc(nmol*sizeof(FP),64);
+  if(gfx == nullptr) gfx = (FP*)_mm_malloc(nmol*sizeof(FP),64);
+  if(gfy == nullptr) gfy = (FP*)_mm_malloc(nmol*sizeof(FP),64);
+  if(gfz == nullptr) gfz = (FP*)_mm_malloc(nmol*sizeof(FP),64);
+  if(gvx == nullptr) gvx = (FP*)_mm_malloc(nmol*sizeof(FP),64);
+  if(gvy == nullptr) gvy = (FP*)_mm_malloc(nmol*sizeof(FP),64);
+  if(gvz == nullptr) gvz = (FP*)_mm_malloc(nmol*sizeof(FP),64);
+  if(glj == nullptr) glj = (FP*)_mm_malloc(nmol*sizeof(FP),64);
+  if(gcl == nullptr) gcl = (FP*)_mm_malloc(nmol*sizeof(FP),64);
   assert(gx  != nullptr);
   assert(gy  != nullptr);
   assert(gz  != nullptr);
@@ -1134,6 +1134,9 @@ void ForceCalculator::SwitchingTuning(Molecule* m,Atom* a,const MolTypeList mtl,
   __assume_aligned(ae,64);
   __assume_aligned(aq,64);
 
+#ifdef INSERT_TIMER_FORCE
+  prof.beg(Profiler::Force);
+#endif
   for(int iv=0;iv<(nmol/nlane)*nlane;iv+=nlane){
     const int js = jstart[iv/nlane];
     int je = jend[iv/nlane];
@@ -1172,9 +1175,6 @@ void ForceCalculator::SwitchingTuning(Molecule* m,Atom* a,const MolTypeList mtl,
 	s_i[d] =  as[i + d*offset];
 	afx_i[d] = afy_i[d] = afz_i[d] = ZERO;
       }
-#ifdef INSERT_TIMER_FORCE
-      prof.beg(Profiler::Force);
-#endif
 
       for(int jj = js; jj<=je; jj++){
 	int j = jj % nmol;
@@ -1193,12 +1193,8 @@ void ForceCalculator::SwitchingTuning(Molecule* m,Atom* a,const MolTypeList mtl,
       gvz[i] = gvz_i;
       gcl[i] = gcl_i;
       glj[i] = glj_i;
-#ifdef INSERT_TIMER_FORCE
-      prof.end(Profiler::Force);
-#endif
     } // ii loop
   }// iv loop
-
   // tail loop
   for(int i=(nmol/nlane)*nlane;i<nmol;i++){
     const int js = jstart[i/nlane];
@@ -1259,7 +1255,10 @@ void ForceCalculator::SwitchingTuning(Molecule* m,Atom* a,const MolTypeList mtl,
     prof.end(Profiler::Force);
 #endif
   }// i loop
-  
+#ifdef INSERT_TIMER_FORCE
+  prof.end(Profiler::Force);
+#endif
+
 #ifdef INSERT_TIMER_FORCE
   prof.beg(Profiler::Post);
 #endif
