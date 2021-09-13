@@ -14,8 +14,15 @@ class Profiler{
     D5,
     D6,
     CalcForce,
+    Sort,
     M2A,
     Switching,
+#ifdef INSERT_TIMER_FORCE
+    Pre,
+    Neigh,
+    Force,
+    Post,
+#endif
     Wall,
     A2M,
     Total,
@@ -29,8 +36,15 @@ class Profiler{
     "D5    ",
     "D6    ",
     "Force ",
+    "  Sort  ",
     "  M2A   ",
     "  Nb    ",
+#ifdef INSERT_TIMER_FORCE
+    "    Pre  ",
+    "    Neigh ",
+    "    Force ",
+    "    Post  ",
+#endif
     "  Wall  ",
     "  A2M   ",
     "Total  "
@@ -41,10 +55,13 @@ class Profiler{
   unsigned long long count[NumProf];
 
   Profiler(){
+#ifdef INSERT_TIMER_FORCE
+    fprintf(stderr,"WARNING: inserting profiler in force can cause significant performance drop. You should remove INSERT_TIMER_FORCE macro.\n");
+#endif
     clear();
   }
   ~Profiler(){
-    print();
+    //print();
   }
   void clear(){
     for(int i=0;i<NumProf;i++){
@@ -66,6 +83,14 @@ class Profiler{
     for(int i=0;i<NumProf;i++){
       fprintf(fp,"%s%e\n",name[i],elapsed[i].count());
     }
+  }
+
+  Profiler operator+(const Profiler& rhs) const {
+    Profiler ret;
+    for(int i=0;i<NumProf;i++){
+      ret.elapsed[i] = this->elapsed[i] + rhs.elapsed[i];
+    }
+    return ret;
   }
 };
 

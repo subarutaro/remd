@@ -1,6 +1,10 @@
 #include "molecules.h"
 #include "unit.h"
 
+#ifdef SORT_MOLECULES
+#include <algorithm>
+#endif
+
 void Molecules::MakeMolTypeList()
 { // for spce
   // making MolTypeList
@@ -313,12 +317,49 @@ void Molecules::Sort(){
 }
 
 void Molecules::ConvertToAtoms(){
+#if defined(FOUR_SITE) || defined(THREE_SITE) || defined(FIVES_ITE)
+  const MolType mt = mlist[mlcl[0].type];
+  const int nsite = mt.a.size();
+#pragma omp simd
+  for(unsigned int i=0;i<nmol;i++){
+    const Molecule& m = mlcl[i];
+    for(unsigned int d=0;d<nsite;d++){
+      Atom& a = atom[4*i + d];
+      a.t = mt.a[d].id;
+      a.i = i;
+      dvec3 b2s = body_to_space(m.q, mt.a[d].r);
+      a.r[0] = m.r[0] * L[0] + b2s[0];
+      a.r[1] = m.r[1] * L[1] + b2s[1];
+      a.r[2] = m.r[2] * L[2] + b2s[2];
+#ifndef SWITCHING
+      if(a.r[0] >= L[0]) a.r[0] -= L[0];
+      if(a.r[1] >= L[1]) a.r[1] -= L[1];
+      if(a.r[2] >= L[2]) a.r[2] -= L[2];
+      if(a.r[0] <  0)    a.r[0] += L[0];
+      if(a.r[1] <  0)    a.r[1] += L[1];
+      if(a.r[2] <  0)    a.r[2] += L[2];
+#endif
+      //if(m.id==0) std::cout << "(body) r of atom 0:" << mt.a[d].r << std::endl;
+      //if(m.id==0) std::cout << "(space)r of atom 0:" << body_to_space(m.q, mt.a[d].r) << std::endl;
+      a.f[0] = 0.0;
+      a.f[1] = 0.0;
+      a.f[2] = 0.0;
+#ifndef SWITCHING
+      a.e = 0.0;
+      a.v[0] = 0.0;
+      a.v[1] = 0.0;
+      a.v[2] = 0.0;
+#endif
+     }
+  }
+#else
   int atom_count = 0;
+#pragma omp simd
   for(unsigned int i=0;i<nmol;i++){
     const Molecule m = mlcl[i];
     const MolType mt = mlist[m.type];
     for(unsigned int d=0;d<mt.a.size();d++){
-       assert(natom > atom_count);
+      //assert(natom > atom_count);
       atom[atom_count].t = mt.a[d].id;
       atom[atom_count].i = i;
       atom[atom_count].r = m.r * L + body_to_space(m.q, mt.a[d].r);
@@ -338,9 +379,47 @@ void Molecules::ConvertToAtoms(){
       //if(m.id==0) std::cout << "(space)r of atom 0:" << body_to_space(m.q, mt.a[d].r) << std::endl;
     }
   }
+#endif
 }
 
 void Molecules::ConvertFromAtoms(){
+#if defined(FOUR_SITE) || defined(THREE_SITE) || defined(FIVES_ITE)
+  double etmp = 0.0;dvec3 vtmp = 0.0;
+  const MolType& mt = mlist[mlcl[0].type];
+  const int nsite = mt.a.size();
+#pragma omp simd
+  for(int i=0;i<nmol;i++){
+    Molecule& m = mlcl[i];
+    dvec3 f = 0.0;
+    dvec4 n = 0.0;
+    for(unsigned int d = 0;d<nsite;d++){
+      const Atom& a = atom[4*i + d];
+#ifndef SWITCHING
+      f += a.f;
+#endif
+      const dvec3 fbody = space_to_body(m.q,a.f);
+      n[0] += scalar_prod(mt.a[d].r,fbody);
+      n[1] += mt.a[d].r[1]*fbody[2] - mt.a[d].r[2]*fbody[1];
+      n[2] += mt.a[d].r[2]*fbody[0] - mt.a[d].r[0]*fbody[2];
+      n[3] += mt.a[d].r[0]*fbody[1] - mt.a[d].r[1]*fbody[0];
+#ifndef SWITCHING
+      etmp += a.e;
+      vtmp += a.v;
+#endif
+    }
+#ifndef SWITCHING
+    m.f = f;
+#endif
+    m.n = n;
+  }
+  //std::cout << "pot= " << tmp << std::endl;
+#ifdef SWITCHING
+  prop.pot = prop.lj + prop.clmb + prop.wall;
+#else
+  prop.pot = etmp;
+  prop.vir = vtmp;
+#endif
+#else
   int atom_count = 0;
   double etmp = 0.0;dvec3 vtmp = 0.0;
   for(int i=0;i<nmol;i++){
@@ -372,20 +451,62 @@ void Molecules::ConvertFromAtoms(){
   prop.pot = etmp;
   prop.vir = vtmp;
 #endif
+
+#endif
 }
 
 void Molecules::CalcForcePot(){
+#ifdef SWITCHING
+#if defined(FOUR_SITE) || defined(THREE_SITE) || defined(FIVE_SITE)
+  prof.beg(Profiler::Sort);
+  std::sort(mlcl,mlcl+nmol,[](const Molecule& a,const Molecule& b){return a.r[2] < b.r[2];});
+  prof.end(Profiler::Sort);
+  //printf("making jstart & jend\n");
+  constexpr int nsimd = 64 / sizeof(FP);
+  //constexpr int nlane = nsimd*2;
+  constexpr int nlane = nsimd;
+  int jstart[(nmol+nlane-1)/nlane], jend[(nmol+nlane-1)/nlane];
+  for(int i=0;i<((nmol+nlane-1)/nlane)*nlane;i+=nlane){
+    int s = i;
+    double lb = mlcl[s].r[2] - fclcltr->rcut/L[2];
+    while(mlcl[s].r[2] >= lb){
+      s--;
+      if(s<0){
+	s += nmol;
+	lb += 1.0;
+      }
+    }
+    jstart[i/nlane] = s;
+
+    int e = std::min(i+nlane-1,nmol-1);
+    double ub = mlcl[e].r[2] + fclcltr->rcut/L[2];
+    while(mlcl[e].r[2] <= ub){
+      e++;
+      if(e>=nmol){
+	e -= nmol;
+	ub -= 1.0;
+      }
+    }
+    jend[i/nlane] = e;
+    assert(0 <= s && s < nmol);
+    assert(0 <= e && e < nmol);
+    //printf("(js,je)= %d %d\n",s,e);
+  }
+  //printf("gen neighbor list finished\n");
+#endif
+#endif
   prof.beg(Profiler::M2A);
   ConvertToAtoms();
   prof.end(Profiler::M2A);
+  //printf("M2A finished\n");
 #ifdef SWITCHING
   prof.beg(Profiler::Switching);
 #ifdef THREE_SITE
-  fclcltr->Switching3site(mlcl,atom,mlist,L,nmol,prop);
+  fclcltr->Switching3site(mlcl,atom,mlist,L,nmol,prop,jstart,jend,nlane);
 #elif FOUR_SITE
-  fclcltr->Switching4site(mlcl,atom,mlist,L,nmol,prop);
+  fclcltr->Switching4site(mlcl,atom,mlist,L,nmol,prop,jstart,jend,nlane);
 #elif FIVE_SITE
-  fclcltr->Switching5site(mlcl,atom,mlist,L,nmol,prop);
+  fclcltr->Switching5site(mlcl,atom,mlist,L,nmol,prop,jstart,jend,nlane);
 #else
   fclcltr->Switching(mlcl,atom,mlist,L,nmol,prop);
 #endif
@@ -394,14 +515,17 @@ void Molecules::CalcForcePot(){
   fclcltr->SR(mlcl,atom,L,natom);
   fclcltr->LR(atom,L,natom);
 #endif
+  //printf("Non-bond force finished\n");
 
   prof.beg(Profiler::Wall);
   if(((mode>>CSHIFT)&MASK)>0) fclcltr->Confined(mlcl,atom,mlist,L,nmol,prop);
   prof.end(Profiler::Wall);
+  //printf("Wall force finished\n");
 
   prof.beg(Profiler::A2M);
   ConvertFromAtoms();
   prof.end(Profiler::A2M);
+  //printf("A2M finished\n");
 }
 
 dvec3 Molecules::TranslationalEnergy(){
