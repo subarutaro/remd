@@ -1175,27 +1175,11 @@ void ForceCalculator::SwitchingTuning(Molecule* m,Atom* a,const MolTypeList mtl,
 #ifdef INSERT_TIMER_FORCE
       prof.beg(Profiler::Force);
 #endif
-#if 1
-      // single j loop is faster than 2 loops.
-      // removing if statement cause bug. I don't know why.
+
       for(int jj = js; jj<=je; jj++){
 	int j = jj % nmol;
 	INNER_MOST_LOOP;
       }
-#else
-      if(js <= je){      
-	for(int j=js; j<=je; j++){
-	  INNER_MOST_LOOP;
-	}
-      }else{
-	for(int j=0; j<=js; j++){
-	  INNER_MOST_LOOP;
-	}
-	for(int j=je; j<nmol; j++){
-	  INNER_MOST_LOOP;
-	}
-      }
-#endif
       for(int d=0;d<nsite;d++){
 	afx[i+d*offset] = afx_i[d];
 	afy[i+d*offset] = afy_i[d];
