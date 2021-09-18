@@ -2376,8 +2376,10 @@ void remd_kernel
   VGGSI tmpqp;
   float ys,tmp1,tmp2;
 #endif
+
   // velocity scaling after temperature exchange
   if(((MODE>>TSHIFT)&MASK) == 1){
+  if(cond0_dev[bid].x != cond1_dev[bid].x || cond0_dev[bid].y != cond0_dev[bid].y){
     //scaling velocities
     const float scale = sqrtf(cond0_dev[bid].x/cond1_dev[bid].x);
     for(unsigned int j=tid;j<nmol;j+=bdm){
@@ -2407,6 +2409,9 @@ void remd_kernel
     //s sometimes becomes smaller/larger and smaller/larger with replica exchanges
     t.x = 1.f;
   }
+  } 
+
+  if(cond0_dev[bid].x != cond1_dev[bid].x || cond0_dev[bid].y != cond0_dev[bid].y){
   //remove momentumn
   float mass = 0.f;
   mom = make_float3(0.f);
@@ -2429,9 +2434,11 @@ void remd_kernel
   if(((MODE>>CSHIFT)&MASK) == 1){
     remove_angular_momentum_in_tube(r_rep,v_rep,q_rep,p_rep,t,L,nmol);
   }
+  }
 
   //calc new hamiltonian
   kin = CalcKin(r_rep,v_rep,q_rep,p_rep,L,t,nmol);
+  if(cond0_dev[bid].x != cond1_dev[bid].x || cond0_dev[bid].y != cond1_dev[bid].y){
   H0  = potvir.w + sum(kin);
   if(((MODE>>TSHIFT)&MASK) == 1){
     H0 += gkT*log(t.x) + t.y*t.y*t.z;
@@ -2464,7 +2471,9 @@ void remd_kernel
     H0 += (b.x*b.x + b.y*b.y)*b.w;
 #endif
   if(((MODE>>PSHIFT)&MASK) > 0) H0 += P*V;
-
+  }else{
+    H0 = H0_dev[bid];
+  }
   // main roop
   for(unsigned long s=0;s<interval;s++){
 #ifdef STEEPEST

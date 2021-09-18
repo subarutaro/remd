@@ -93,6 +93,7 @@ REMD::REMD(){
 #ifdef ENABLE_GPU
   ngpus = param.ngpus;
   if(ngpus>0){
+    fprintf(stdout,"GPU is used. # of gpu is %d, offest is %d\n",param.ngpus,param.gpu_offset);
     mdgpu = new REMDGPU(md,nreplica);
   }
 #else
@@ -290,8 +291,8 @@ void REMD::ExecuteREMD(){
       std::cout << " " << s;
       std::cout << " " << pot[rep];
       std::cout << " " << vol[rep];
-#ifdef ENABLE_GPU
       if(ngpus>0){
+#ifdef ENABLE_GPU
  	Average a = mdgpu->GetAverages(rep);
 	std::cout << " " << a.sum[Average::LJ];
 	std::cout << " " << a.sum[Average::CLMB];
@@ -314,35 +315,39 @@ void REMD::ExecuteREMD(){
 	  std::cout << " " << a.sum[Average::BSTy];
 	}
 	std::cout << " " << a.sum[Average::DRF];
-      }
+	std::cout << " " << a.sum[Average::TOT];
 #else
-      md[rep]->CalcProperties();
-      const Property prop = md[rep]->GetProperty();
-      std::cout << " " << prop.lj;
-      std::cout << " " << prop.clmb;
-      std::cout << " " << prop.wall;
-      std::cout << " " << prop.T;
-      if(param.confined == 1){
-	std::cout << " " << prop.prs[2];
-      }else if(param.confined == 2){
-	std::cout << " " << prop.prs[0];
-	std::cout << " " << prop.prs[1];
-      }
-      std::cout << " " << prop.tra;
-      std::cout << " " << prop.rot;
-      //std::cout << " " << prop.kin;
-      //std::cout << " " << prop.tsm;
-      //std::cout << " " << prop.tsp;
-      //std::cout << " " << prop.tst;
-      std::cout << " " << md[rep]->tst->s;
-      std::cout << " " << md[rep]->tst->Ps;
-      if(param.confined == 1){
-	std::cout << " " << md[rep]->bst->Pv[2];
-      }else if(param.confined == 2){
-	std::cout << " " << md[rep]->bst->Pv[0];
-	std::cout << " " << md[rep]->bst->Pv[1];
-      }
-      std::cout << " " << prop.ham;
+        fprintr(stderr,"error: gpu is not enabled!");
+#endif
+      }else{
+        md[rep]->CalcProperties();
+        const Property prop = md[rep]->GetProperty();
+        std::cout << " " << prop.lj;
+        std::cout << " " << prop.clmb;
+        std::cout << " " << prop.wall;
+        std::cout << " " << prop.T;
+        if(param.confined == 1){
+	  std::cout << " " << prop.prs[2];
+        }else if(param.confined == 2){
+	  std::cout << " " << prop.prs[0];
+	  std::cout << " " << prop.prs[1];
+        }
+        std::cout << " " << prop.tra;
+        std::cout << " " << prop.rot;
+        //std::cout << " " << prop.kin;
+        //std::cout << " " << prop.tsm;
+        //std::cout << " " << prop.tsp;
+        //std::cout << " " << prop.tst;
+        std::cout << " " << md[rep]->tst->s;
+        std::cout << " " << md[rep]->tst->Ps;
+        if(param.confined == 1){
+	  std::cout << " " << md[rep]->bst->Pv[2];
+        }else if(param.confined == 2){
+	  std::cout << " " << md[rep]->bst->Pv[0];
+	  std::cout << " " << md[rep]->bst->Pv[1];
+        }
+        std::cout << " " << prop.ham;
+        std::cout << " " << prop.tot;
 #if 0
       std::cout << " " << prop.Tave / (double)prop.nave;
       if(param.confined == 1){
@@ -352,7 +357,7 @@ void REMD::ExecuteREMD(){
 	std::cout << " " << prop.Pave[1] / (double)prop.nave;
       }
 #endif
-#endif
+      } // gpu or not
       std::cout << std::endl;
     }
 #endif
@@ -833,10 +838,37 @@ void REMD::ExecuteWHAM(){
 
 void REMD::OutputBinary(){
   for(int rep=0;rep<remdinfo->GetNumReplica();rep++){
+    if(ngpus > 0){
 #ifdef ENABLE_GPU
-    const Average a = mdgpu->GetAverages(remdinfo->GetIndex(rep));
-    binary[rep].write((char*)&a.sum,Average::NUM_ELEM*sizeof(double));
+      const Average a = mdgpu->GetAverages(remdinfo->GetIndex(rep));
+      binary[rep].write((char*)&a.sum,Average::NUM_ELEM*sizeof(double));
+#else
+      fprintf(stderr,"%s : %s : error: gpu is not enabled!",__FILE__,__LINE__);
+      exit(EXIT_FAILURE);
 #endif
+    }else{
+      const Molecules* m = md[remdinfo->GetIndex(rep)];
+      const Property prop = m->GetProperty();
+      Average a;
+      a.sum[Average::LJ]   = prop.lj;
+      a.sum[Average::CLMB] = prop.clmb;
+      a.sum[Average::WALL] = prop.wall;
+      a.sum[Average::TRA]  = prop.tra;
+      a.sum[Average::ROT]  = prop.rot;
+      a.sum[Average::T]    = prop.T;
+      a.sum[Average::P]    = prop.prs[3];
+      a.sum[Average::Px]   = prop.prs[0];
+      a.sum[Average::Py]   = prop.prs[1];
+      a.sum[Average::Pz]   = prop.prs[2];
+      a.sum[Average::TOT]  = prop.tot;
+      a.sum[Average::DRF]  = prop.ham;
+      a.sum[Average::TSTs] = m->tst->s;
+      a.sum[Average::TSTv] = m->tst->Ps;;
+      a.sum[Average::BSTx] = m->bst->Pv[0];
+      a.sum[Average::BSTy] = m->bst->Pv[1];
+      a.sum[Average::BSTz] = m->bst->Pv[2];
+      binary[rep].write((char*)&a.sum,Average::NUM_ELEM*sizeof(double));
+    }
   }
 }
 
