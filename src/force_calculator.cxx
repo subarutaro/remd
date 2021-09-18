@@ -884,7 +884,11 @@ void ForceCalculator::SwitchingTuning(Molecule *m,Atom *a,const MolTypeList mtl,
       const double dswy = dgy*(dsw*r01i);
       const double dswz = dgz*(dsw*r01i);
       double fx,fy,fz,e;
-      if constexpr (nsite == 3){
+      if
+#if __GNUC__ >= 7
+      constexpr
+#endif
+      (nsite == 3){
 	fx = fy = fz = e = 0.0;
 	KERNEL_LJ_CLMB(3*i+0,3*j+0);
 	KERNEL_CLMB   (3*i+0,3*j+1);
@@ -927,7 +931,11 @@ void ForceCalculator::SwitchingTuning(Molecule *m,Atom *a,const MolTypeList mtl,
 	gvy[i] += fy*dgy;
 	gvz[i] += fz*dgz;
       }
-      if constexpr (nsite == 4){
+      if
+#if __GNUC__ >= 7
+      constexpr
+#endif
+      (nsite == 4){
 	fx = fy = fz = e = 0.0;
 	KERNEL_LJ(4*i+0,4*j+0);
 	fx -= dswx*e;
@@ -982,7 +990,11 @@ void ForceCalculator::SwitchingTuning(Molecule *m,Atom *a,const MolTypeList mtl,
 	gvy[i] += fy*dgy;
 	gvz[i] += fz*dgz;
       }
-      if constexpr (nsite == 5){
+      if
+#if __GNUC__ >= 7
+      constexpr
+#endif
+      (nsite == 5){
 	fx = fy = fz = e = 0.0;
 	KERNEL_LJ(5*i+0,5*j+0);
 	fx -= dswx*e;
