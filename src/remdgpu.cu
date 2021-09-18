@@ -2379,98 +2379,98 @@ void remd_kernel
 
   // velocity scaling after temperature exchange
   if(((MODE>>TSHIFT)&MASK) == 1){
+    if(cond0_dev[bid].x != cond1_dev[bid].x || cond0_dev[bid].y != cond0_dev[bid].y){
+      //scaling velocities
+      const float scale = sqrtf(cond0_dev[bid].x/cond1_dev[bid].x);
+      for(unsigned int j=tid;j<nmol;j+=bdm){
+	float4 v = v_rep[j];
+	v.x  *= scale/t.x;
+	v.y  *= scale/t.x;
+	v.z  *= scale/t.x;
+	v_rep[j] = v;
+
+	ptype4 p = p_rep[j];
+	p.x *= scale/t.x;
+	p.y *= scale/t.x;
+	p.z *= scale/t.x;
+	p.w *= scale/t.x;
+	p_rep[j] = p;
+      }
+      t.y *= scale;
+      if(((MODE>>PSHIFT)&MASK) == 1) b.x *= scale*t.x;
+      if(((MODE>>PSHIFT)&MASK) == 2) b.z *= scale*t.x;
+#ifdef SQUARE
+      if(((MODE>>PSHIFT)&MASK) == 3){b.x *= scale*t.x;}
+#else
+      if(((MODE>>PSHIFT)&MASK) == 3){b.x *= scale*t.x; b.y *= scale*t.x;}
+#endif
+      //reset s
+      //without reset, s becomes smaller/larger for low/high temperature, and
+      //s sometimes becomes smaller/larger and smaller/larger with replica exchanges
+      t.x = 1.f;
+    }
+  }
+
   if(cond0_dev[bid].x != cond1_dev[bid].x || cond0_dev[bid].y != cond0_dev[bid].y){
-    //scaling velocities
-    const float scale = sqrtf(cond0_dev[bid].x/cond1_dev[bid].x);
+    //remove momentumn
+    float mass = 0.f;
+    mom = make_float3(0.f);
     for(unsigned int j=tid;j<nmol;j+=bdm){
       float4 v = v_rep[j];
-      v.x  *= scale/t.x;
-      v.y  *= scale/t.x;
-      v.z  *= scale/t.x;
+      mom  += v*v.w;
+      mass += v.w;
       v_rep[j] = v;
-
-      ptype4 p = p_rep[j];
-      p.x *= scale/t.x;
-      p.y *= scale/t.x;
-      p.z *= scale/t.x;
-      p.w *= scale/t.x;
-      p_rep[j] = p;
     }
-    t.y *= scale;
-    if(((MODE>>PSHIFT)&MASK) == 1) b.x *= scale*t.x;
-    if(((MODE>>PSHIFT)&MASK) == 2) b.z *= scale*t.x;
-#ifdef SQUARE
-    if(((MODE>>PSHIFT)&MASK) == 3){b.x *= scale*t.x;}
-#else
-    if(((MODE>>PSHIFT)&MASK) == 3){b.x *= scale*t.x; b.y *= scale*t.x;}
-#endif
-    //reset s
-    //without reset, s becomes smaller/larger for low/high temperature, and
-    //s sometimes becomes smaller/larger and smaller/larger with replica exchanges
-    t.x = 1.f;
-  }
-  } 
-
-  if(cond0_dev[bid].x != cond1_dev[bid].x || cond0_dev[bid].y != cond0_dev[bid].y){
-  //remove momentumn
-  float mass = 0.f;
-  mom = make_float3(0.f);
-  for(unsigned int j=tid;j<nmol;j+=bdm){
-    float4 v = v_rep[j];
-    mom  += v*v.w;
-    mass += v.w;
-    v_rep[j] = v;
-  }
-  mom  = block_all_reduce(mom);
-  mass = block_all_reduce(mass);
-  mom /= mass;
-  for(unsigned int j=tid;j<nmol;j+=bdm){
-    float4 v = v_rep[j];
-    if(((MODE>>CSHIFT)&MASK) == 0) v   -= mom;
-    if(((MODE>>CSHIFT)&MASK) == 1) v.z -= mom.z;
-    if(((MODE>>CSHIFT)&MASK) == 2){v.x -= mom.x; v.y -= mom.y;}
-    v_rep[j] = v;
-  }
-  if(((MODE>>CSHIFT)&MASK) == 1){
-    remove_angular_momentum_in_tube(r_rep,v_rep,q_rep,p_rep,t,L,nmol);
-  }
+    mom  = block_all_reduce(mom);
+    mass = block_all_reduce(mass);
+    mom /= mass;
+    for(unsigned int j=tid;j<nmol;j+=bdm){
+      float4 v = v_rep[j];
+      if(((MODE>>CSHIFT)&MASK) == 0) v   -= mom;
+      if(((MODE>>CSHIFT)&MASK) == 1) v.z -= mom.z;
+      if(((MODE>>CSHIFT)&MASK) == 2){v.x -= mom.x; v.y -= mom.y;}
+      v_rep[j] = v;
+    }
+    if(((MODE>>CSHIFT)&MASK) == 1){
+      remove_angular_momentum_in_tube(r_rep,v_rep,q_rep,p_rep,t,L,nmol);
+    }
   }
 
-  //calc new hamiltonian
   kin = CalcKin(r_rep,v_rep,q_rep,p_rep,L,t,nmol);
   if(cond0_dev[bid].x != cond1_dev[bid].x || cond0_dev[bid].y != cond1_dev[bid].y){
-  H0  = potvir.w + sum(kin);
-  if(((MODE>>TSHIFT)&MASK) == 1){
-    H0 += gkT*log(t.x) + t.y*t.y*t.z;
-  }
+    //calc new hamiltonian
+    H0  = potvir.w + sum(kin);
+    if(((MODE>>TSHIFT)&MASK) == 1){
+      H0 += gkT*log(t.x) + t.y*t.y*t.z;
+    }
 
-  if(((MODE>>PSHIFT)&MASK) == 1)
-    H0 += (b.x*b.x + b.y*b.y + b.z*b.z)*b.w;
-  if(((MODE>>PSHIFT)&MASK) == 2)
-    H0 += b.z*b.z*b.w;
-  if(((MODE>>PSHIFT)&MASK) == 3)
+    if(((MODE>>PSHIFT)&MASK) == 1)
+      H0 += (b.x*b.x + b.y*b.y + b.z*b.z)*b.w;
+    if(((MODE>>PSHIFT)&MASK) == 2)
+      H0 += b.z*b.z*b.w;
+    if(((MODE>>PSHIFT)&MASK) == 3)
 #ifdef SQUARE
-    H0 += b.x*b.x*b.w;
+      H0 += b.x*b.x*b.w;
 #else
     H0 += (b.x*b.x + b.y*b.y)*b.w;
 #endif
-  if(((MODE>>PSHIFT)&MASK) > 0) H0 += P*V;
+    if(((MODE>>PSHIFT)&MASK) > 0) H0 += P*V;
 
-  H0  = potvir.w + rslt_dev[bid].kin;
-  if(((MODE>>TSHIFT)&MASK) == 1){
-    H0 += gkT*log(t.x) + t.y*t.y*t.z;
-  }
-  if(((MODE>>PSHIFT)&MASK) == 1)
-    H0 += (b.x*b.x + b.y*b.y + b.z*b.z)*b.w;
-  if(((MODE>>PSHIFT)&MASK) == 2)
-    H0 += b.z*b.z*b.w;
-  if(((MODE>>PSHIFT)&MASK) == 3)
+    H0  = potvir.w + rslt_dev[bid].kin;
+    if(((MODE>>TSHIFT)&MASK) == 1){
+      H0 += gkT*log(t.x) + t.y*t.y*t.z;
+    }
+    if(((MODE>>PSHIFT)&MASK) == 1)
+      H0 += (b.x*b.x + b.y*b.y + b.z*b.z)*b.w;
+    if(((MODE>>PSHIFT)&MASK) == 2)
+      H0 += b.z*b.z*b.w;
+    if(((MODE>>PSHIFT)&MASK) == 3)
 #ifdef SQUARE
-    H0 += b.x*b.x*b.w;
+      H0 += b.x*b.x*b.w;
 #else
     H0 += (b.x*b.x + b.y*b.y)*b.w;
 #endif
-  if(((MODE>>PSHIFT)&MASK) > 0) H0 += P*V;
+    if(((MODE>>PSHIFT)&MASK) > 0) H0 += P*V;
   }else{
     H0 = H0_dev[bid];
   }
