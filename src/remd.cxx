@@ -189,6 +189,12 @@ REMD::REMD(){
 
 REMD::~REMD(){
   printf("====destruct class REMD====\n");
+  const I nreplica = remdinfo->GetNumReplica();
+  for(int rep=0;rep<nreplica;rep++){
+    Profiler p = md[rep]->prof + md[rep]->fclcltr->prof;
+    p.print();
+  }
+
   if(os_ene != nullptr) delete os_ene;
   if(wham != nullptr){
     std::cout << "delete wham" << std::endl;

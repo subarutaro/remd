@@ -17,10 +17,16 @@
 #include "unit.h"
 #include "timer.h"
 #include "parameter.h"
+#include "profiler.h"
 
 //#define NO_PBC
 //#define DEBUG
-
+#ifdef USE_FP32
+#define FP float
+#else
+#define FP double
+#endif
+//#define FP float
 
 class ForceCalculator{
  public:
@@ -44,7 +50,38 @@ class ForceCalculator{
   double  eps_wall;
   double  rho_wall;
 
+  Profiler prof;
+
   int nthreads;
+
+#ifdef SWITCHING
+#ifdef __INTEL_COMPILER
+#define ATTR_ALIGN __declspec(align(64))
+#else
+#define ATTR_ALIGN
+#endif
+  ATTR_ALIGN FP *gx = nullptr;
+  ATTR_ALIGN FP *gy = nullptr;
+  ATTR_ALIGN FP *gz = nullptr;
+  ATTR_ALIGN FP *gfx = nullptr;
+  ATTR_ALIGN FP *gfy = nullptr;
+  ATTR_ALIGN FP *gfz = nullptr;
+  ATTR_ALIGN FP *gvx = nullptr;
+  ATTR_ALIGN FP *gvy = nullptr;
+  ATTR_ALIGN FP *gvz = nullptr;
+  ATTR_ALIGN FP *glj = nullptr;
+  ATTR_ALIGN FP *gcl = nullptr;
+
+  ATTR_ALIGN FP *ax = nullptr;
+  ATTR_ALIGN FP *ay = nullptr;
+  ATTR_ALIGN FP *az = nullptr;
+  ATTR_ALIGN FP *afx = nullptr;
+  ATTR_ALIGN FP *afy = nullptr;
+  ATTR_ALIGN FP *afz = nullptr;
+  ATTR_ALIGN FP *as = nullptr;
+  ATTR_ALIGN FP *ae = nullptr;
+  ATTR_ALIGN FP *aq = nullptr;
+#endif
 
   std::string prefix;
   //setting function
@@ -72,10 +109,10 @@ class ForceCalculator{
 
   void Switching(Molecule*,Atom*,const MolTypeList,const dvec3,const int,Property&);
   template<int>
-  void SwitchingTuning(Molecule*,Atom*,const MolTypeList,const dvec3,const int,Property&);
-  void Switching3site(Molecule*,Atom*,const MolTypeList,const dvec3,const int,Property&);
-  void Switching4site(Molecule*,Atom*,const MolTypeList,const dvec3,const int,Property&);
-  void Switching5site(Molecule*,Atom*,const MolTypeList,const dvec3,const int,Property&);
+  void SwitchingTuning(Molecule*,Atom*,const MolTypeList,const dvec3,const int,Property&,const int*,const int *,const int);
+  void Switching3site (Molecule*,Atom*,const MolTypeList,const dvec3,const int,Property&,const int*,const int *,const int);
+  void Switching4site (Molecule*,Atom*,const MolTypeList,const dvec3,const int,Property&,const int*,const int *,const int);
+  void Switching5site (Molecule*,Atom*,const MolTypeList,const dvec3,const int,Property&,const int*,const int *,const int);
 };
 
 #endif

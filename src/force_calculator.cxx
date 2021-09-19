@@ -40,6 +40,47 @@ ForceCalculator::ForceCalculator
 }
 
 ForceCalculator::~ForceCalculator(){
+#ifdef __INTEL_COMPILER
+  if(gx  != nullptr) _mm_free(gx);
+  if(gy  != nullptr) _mm_free(gy);
+  if(gz  != nullptr) _mm_free(gz);
+  if(gfx != nullptr) _mm_free(gfx);
+  if(gfy != nullptr) _mm_free(gfy);
+  if(gfz != nullptr) _mm_free(gfz);
+  if(gvx != nullptr) _mm_free(gvx);
+  if(gvy != nullptr) _mm_free(gvy);
+  if(gvz != nullptr) _mm_free(gvz);
+
+  if(ax  != nullptr) _mm_free(ax);
+  if(ay  != nullptr) _mm_free(ay);
+  if(az  != nullptr) _mm_free(az);
+  if(afx != nullptr) _mm_free(afx);
+  if(afy != nullptr) _mm_free(afy);
+  if(afz != nullptr) _mm_free(afz);
+  if(as  != nullptr) _mm_free(as);
+  if(ae  != nullptr) _mm_free(ae);
+  if(aq  != nullptr) _mm_free(aq);
+#else
+  if(gx  != nullptr) delete[] gx;
+  if(gy  != nullptr) delete[] gy;
+  if(gz  != nullptr) delete[] gz;
+  if(gfx != nullptr) delete[] gfx;
+  if(gfy != nullptr) delete[] gfy;
+  if(gfz != nullptr) delete[] gfz;
+  if(gvx != nullptr) delete[] gvx;
+  if(gvy != nullptr) delete[] gvy;
+  if(gvz != nullptr) delete[] gvz;
+
+  if(ax  != nullptr) delete[] ax;
+  if(ay  != nullptr) delete[] ay;
+  if(az  != nullptr) delete[] az;
+  if(afx != nullptr) delete[] afx;
+  if(afy != nullptr) delete[] afy;
+  if(afz != nullptr) delete[] afz;
+  if(as  != nullptr) delete[] as;
+  if(ae  != nullptr) delete[] ae;
+  if(aq  != nullptr) delete[] aq;
+#endif
   free(kvec);
   free(fwall);
 }
@@ -727,356 +768,552 @@ void ForceCalculator::Switching(Molecule *m,Atom *a,const MolTypeList mtl,const 
   prop.clmb *= 0.5;
 }
 
+#if 1
+
+#define ZERO    0.0
+#define HALF    0.5
+#define ONE     1.0
+#define FIVE    5.0
+#define TEN    10.0
+#define TWELVE 12.0
+#define THIRTY 30.0
+
+#else
+
+#define ZERO    0.0f
+#define HALF    0.5f
+#define ONE     1.0f
+#define FIVE    5.0f
+#define TEN    10.0f
+#define TWELVE 12.0f
+#define THIRTY 30.0f
+
+#endif
+
 #define KERNEL_LJ_CLMB(a,b)						\
   {									\
-  const double qq = charge[a] * charge[b];				\
-  double dx = ax[a] - ax[b];						\
-  double dy = ay[a] - ay[b];						\
-  double dz = az[a] - az[b];						\
-  if(dx >= 0.5*L[0]) dx -= L[0];					\
-  if(dx < -0.5*L[0]) dx += L[0];					\
-  if(dy >= 0.5*L[1]) dy -= L[1];					\
-  if(dy < -0.5*L[1]) dy += L[1];					\
-  if(dz >= 0.5*L[2]) dz -= L[2];					\
-  if(dz < -0.5*L[2]) dz += L[2];					\
-  r02 = dx*dx + dy*dy + dz*dz;						\
-  double r02i = 1.0/r02;							\
-  double r01i = sqrt(r02i);							\
-  double sigma = (as[a] + as[b]);					\
-  double rs06i = sigma * sigma * r02i;						\
-  rs06i = rs06i*rs06i*rs06i;						\
-  const double epsilon = ae[a] * ae[b];					\
-  const double elj = epsilon * rs06i * (rs06i - 1.0);			\
-  const double ecl = qq*r01i;						\
-  glj[i] += sw*elj;							\
-  gcl[i] += sw*ecl;							\
-  const double etmp = elj + ecl;					\
-  double ftmp = (12.0* epsilon * rs06i * (rs06i - 0.5) * r02i + qq*r01i*r02i)*sw; \
-  e += etmp;								\
-  fx += dx*ftmp;							\
-  fy += dy*ftmp;							\
-  fz += dz*ftmp;							\
-  afx[a] += dx*ftmp;							\
-  afy[a] += dy*ftmp;							\
-  afz[a] += dz*ftmp;							\
+    const FP qq = q_i[a] * aq[b];					\
+    FP dx = dgx + ax_i[a] - ax[b];					\
+    FP dy = dgy + ay_i[a] - ay[b];					\
+    FP dz = dgz + az_i[a] - az[b];					\
+    r02 = dx*dx + dy*dy + dz*dz;					\
+    FP r02i = ONE / r02;						\
+    FP r01i = sqrt(r02i);						\
+    FP sigma = (s_i[a] + as[b]);					\
+    FP rs06i = sigma * sigma * r02i;					\
+    rs06i = rs06i*rs06i*rs06i;						\
+    const FP epsilon = e_i[a] * ae[b];					\
+    const FP elj = epsilon * rs06i * (rs06i - ONE);			\
+    const FP ecl = qq*r01i;						\
+    glj_i += sw*elj;							\
+    gcl_i += sw*ecl;							\
+    const FP etmp = elj + ecl;						\
+    FP ftmp = (TWELVE * epsilon * rs06i * (rs06i - HALF) * r02i + qq*r01i*r02i)*sw; \
+    e += etmp;								\
+    fx += dx*ftmp;							\
+    fy += dy*ftmp;							\
+    fz += dz*ftmp;							\
+    afx_i[a] += dx*ftmp;						\
+    afy_i[a] += dy*ftmp;						\
+    afz_i[a] += dz*ftmp;						\
   }
 #define KERNEL_LJ(a,b)							\
   {									\
-  double dx = ax[a] - ax[b];						\
-  double dy = ay[a] - ay[b];						\
-  double dz = az[a] - az[b];						\
-  if(dx >= 0.5*L[0]) dx -= L[0];					\
-  if(dx < -0.5*L[0]) dx += L[0];					\
-  if(dy >= 0.5*L[1]) dy -= L[1];					\
-  if(dy < -0.5*L[1]) dy += L[1];					\
-  if(dz >= 0.5*L[2]) dz -= L[2];					\
-  if(dz < -0.5*L[2]) dz += L[2];					\
-  r02 = dx*dx + dy*dy + dz*dz;						\
-  double r02i = 1.0/r02;							\
-  double r01i = sqrt(r02i);							\
-  double sigma = (as[a] + as[b]);					\
-  double rs06i = sigma * sigma * r02i;						\
-  rs06i = rs06i*rs06i*rs06i;						\
-  const double epsilon = ae[a] * ae[b];					\
-  const double etmp = epsilon * rs06i * (rs06i - 1.0);			\
-  glj[i] += sw*etmp;							\
-  double ftmp = 12.0* epsilon * rs06i * (rs06i - 0.5) * r02i * sw;	\
-  e += etmp;								\
-  fx += dx*ftmp;							\
-  fy += dy*ftmp;							\
-  fz += dz*ftmp;							\
-  afx[a] += dx*ftmp;							\
-  afy[a] += dy*ftmp;							\
-  afz[a] += dz*ftmp;							\
+    FP dx = dgx + ax_i[a] - ax[b];					\
+    FP dy = dgy + ay_i[a] - ay[b];					\
+    FP dz = dgz + az_i[a] - az[b];					\
+    r02 = dx*dx + dy*dy + dz*dz;					\
+    FP r02i = ONE/r02;							\
+    FP r01i = sqrt(r02i);						\
+    FP sigma = (s_i[a] + as[b]);					\
+    FP rs06i = sigma * sigma * r02i;					\
+    rs06i = rs06i*rs06i*rs06i;						\
+    const FP epsilon = e_i[a] * ae[b];					\
+    const FP etmp = epsilon * rs06i * (rs06i - ONE);			\
+    glj_i += sw*etmp;							\
+    FP ftmp = TWELVE* epsilon * rs06i * (rs06i - HALF) * r02i * sw;	\
+    e += etmp;								\
+    fx += dx*ftmp;							\
+    fy += dy*ftmp;							\
+    fz += dz*ftmp;							\
+    afx_i[a] += dx*ftmp;						\
+    afy_i[a] += dy*ftmp;						\
+    afz_i[a] += dz*ftmp;						\
   }
-#define KERNEL_CLMB(a,b)						\
-  {									\
-  const double qq = charge[a] * charge[b];				\
-  double dx = ax[a] - ax[b];						\
-  double dy = ay[a] - ay[b];						\
-  double dz = az[a] - az[b];						\
-  if(dx >= 0.5*L[0]) dx -= L[0];					\
-  if(dx < -0.5*L[0]) dx += L[0];					\
-  if(dy >= 0.5*L[1]) dy -= L[1];					\
-  if(dy < -0.5*L[1]) dy += L[1];					\
-  if(dz >= 0.5*L[2]) dz -= L[2];					\
-  if(dz < -0.5*L[2]) dz += L[2];					\
-  r02 = dx*dx + dy*dy + dz*dz;						\
-  double r02i = 1.0/r02;						\
-  double r01i = sqrt(r02i);						\
-  const double etmp = qq*r01i;						\
-  gcl[i] += sw*etmp;							\
-  double ftmp = qq*r01i*r02i*sw;					\
-  e += etmp;								\
-  fx += dx*ftmp;							\
-  fy += dy*ftmp;							\
-  fz += dz*ftmp;							\
-  afx[a] += dx*ftmp;							\
-  afy[a] += dy*ftmp;							\
-  afz[a] += dz*ftmp;							\
+#define KERNEL_CLMB(a,b)			\
+  {						\
+    const FP qq = q_i[a] * aq[b];		\
+    FP dx = dgx + ax_i[a] - ax[b];		\
+    FP dy = dgy + ay_i[a] - ay[b];		\
+    FP dz = dgz + az_i[a] - az[b];		\
+    r02 = dx*dx + dy*dy + dz*dz;		\
+    FP r02i = ONE/r02;				\
+    FP r01i = sqrt(r02i);			\
+    const FP etmp = qq*r01i;			\
+    gcl_i += sw*etmp;				\
+    FP ftmp = qq*r01i*r02i*sw;			\
+    e += etmp;					\
+    fx += dx*ftmp;				\
+    fy += dy*ftmp;				\
+    fz += dz*ftmp;				\
+    afx_i[a] += dx*ftmp;			\
+    afy_i[a] += dy*ftmp;			\
+    afz_i[a] += dz*ftmp;			\
   }
+
+#define INNER_MOST_LOOP							\
+  if(i == j) continue;							\
+  FP dgx = gx_i - gx[j];						\
+  FP dgy = gy_i - gy[j];						\
+  FP dgz = gz_i - gz[j];						\
+  /* dgx -= std::round(dgx*Lxi)*Lx; */					\
+  /* dgy -= std::round(dgy*Lyi)*Ly; */					\
+  dgz -= std::round(dgz*Lzi)*Lz;					\
+  FP r02 = dgx*dgx + dgy*dgy + dgz*dgz;					\
+  r02 = std::min(rcutSq,r02);						\
+  FP r01 = sqrt(r02);							\
+  FP sw = ONE, dsw = ZERO;						\
+  if(r01 > rl){								\
+    const FP r01c = r01 - rc;						\
+    const FP r01l = r01 - rl;						\
+    sw  = coef*r01c*r01c*r01c*(TEN * r01l*r01l - FIVE * r01l*r01c + r01c*r01c);	\
+    dsw = coef* THIRTY *r01c*r01c*r01l*r01l;				\
+  }									\
+  FP r01i = ONE / r01;							\
+  const FP dswx = dgx*(dsw*r01i);					\
+  const FP dswy = dgy*(dsw*r01i);					\
+  const FP dswz = dgz*(dsw*r01i);					\
+  FP fx,fy,fz,e;							\
+  if constexpr (nsite == 3){						\
+    fx = fy = fz = e = ZERO;						\
+    KERNEL_LJ_CLMB(0,3*j+0);						\
+    KERNEL_CLMB   (0,3*j+1);						\
+    KERNEL_CLMB   (0,3*j+2);						\
+    fx -= dswx*e;							\
+    fy -= dswy*e;							\
+    fz -= dswz*e;							\
+    gfx_i += fx;							\
+    gfy_i += fy;							\
+    gfz_i += fz;							\
+    gvx_i += fx*dgx;							\
+    gvy_i += fy*dgy;							\
+    gvz_i += fz*dgz;							\
+    fx = fy = fz = e = ZERO;						\
+    KERNEL_CLMB(1,3*j+0);						\
+    KERNEL_CLMB(1,3*j+1);						\
+    KERNEL_CLMB(1,3*j+2);						\
+    fx -= dswx*e;							\
+    fy -= dswy*e;							\
+    fz -= dswz*e;							\
+    gfx_i += fx;							\
+    gfy_i += fy;							\
+    gfz_i += fz;							\
+    gvx_i += fx*dgx;							\
+    gvy_i += fy*dgy;							\
+    gvz_i += fz*dgz;							\
+    fx = fy = fz = e = ZERO;						\
+    KERNEL_CLMB(2,3*j+0);						\
+    KERNEL_CLMB(2,3*j+1);						\
+    KERNEL_CLMB(2,3*j+2);						\
+    fx -= dswx*e;							\
+    fy -= dswy*e;							\
+    fz -= dswz*e;							\
+    gfx_i += fx;							\
+    gfy_i += fy;							\
+    gfz_i += fz;							\
+    gvx_i += fx*dgx;							\
+    gvy_i += fy*dgy;							\
+    gvz_i += fz*dgz;							\
+  }									\
+  if constexpr (nsite == 4){						\
+  fx = fy = fz = e = ZERO;						\
+  KERNEL_LJ(0,j+0*offset);							\
+  fx -= dswx*e;								\
+  fy -= dswy*e;								\
+  fz -= dswz*e;								\
+  gfx_i += fx;								\
+  gfy_i += fy;								\
+  gfz_i += fz;								\
+  gvx_i += fx*dgx;							\
+  gvy_i += fy*dgy;							\
+  gvz_i += fz*dgz;							\
+  fx = fy = fz = e = ZERO;						\
+  KERNEL_CLMB(1,j+1*offset);							\
+  KERNEL_CLMB(1,j+2*offset);							\
+  KERNEL_CLMB(1,j+3*offset);							\
+  fx -= dswx*e;								\
+  fy -= dswy*e;								\
+  fz -= dswz*e;								\
+  gfx_i += fx;								\
+  gfy_i += fy;								\
+  gfz_i += fz;								\
+  gvx_i += fx*dgx;							\
+  gvy_i += fy*dgy;							\
+  gvz_i += fz*dgz;							\
+  fx = fy = fz = e = ZERO;						\
+  KERNEL_CLMB(2,j+1*offset);							\
+  KERNEL_CLMB(2,j+2*offset);							\
+  KERNEL_CLMB(2,j+3*offset);							\
+  fx -= dswx*e;								\
+  fy -= dswy*e;								\
+  fz -= dswz*e;								\
+  gfx_i += fx;								\
+  gfy_i += fy;								\
+  gfz_i += fz;								\
+  gvx_i += fx*dgx;							\
+  gvy_i += fy*dgy;							\
+  gvz_i += fz*dgz;							\
+  fx = fy = fz = e = ZERO;						\
+  KERNEL_CLMB(3,j+1*offset);						\
+  KERNEL_CLMB(3,j+2*offset);						\
+  KERNEL_CLMB(3,j+3*offset);						\
+  fx -= dswx*e;								\
+  fy -= dswy*e;								\
+  fz -= dswz*e;								\
+  gfx_i += fx;								\
+  gfy_i += fy;								\
+  gfz_i += fz;								\
+  gvx_i += fx*dgx;							\
+  gvy_i += fy*dgy;							\
+  gvz_i += fz*dgz;							\
+  }									\
+   if constexpr (nsite == 5){						\
+     fx = fy = fz = e = ZERO;						\
+     KERNEL_LJ(0,5*j+0);						\
+     fx -= dswx*e;							\
+     fy -= dswy*e;							\
+     fz -= dswz*e;							\
+     gfx_i += fx;							\
+     gfy_i += fy;							\
+     gfz_i += fz;							\
+     gvx_i += fx*dgx;							\
+     gvy_i += fy*dgy;							\
+     gvz_i += fz*dgz;							\
+     fx = fy = fz = e = ZERO;						\
+     KERNEL_CLMB(1,5*j+1);						\
+     KERNEL_CLMB(1,5*j+2);						\
+     KERNEL_CLMB(1,5*j+3);						\
+     KERNEL_CLMB(1,5*j+4);						\
+     fx -= dswx*e;							\
+     fy -= dswy*e;							\
+     fz -= dswz*e;							\
+     gfx_i += fx;							\
+     gfy_i += fy;							\
+     gfz_i += fz;							\
+     gvx_i += fx*dgx;							\
+     gvy_i += fy*dgy;							\
+     gvz_i += fz*dgz;							\
+     fx = fy = fz = e = ZERO;						\
+     KERNEL_CLMB(2,5*j+1);						\
+     KERNEL_CLMB(2,5*j+2);						\
+     KERNEL_CLMB(2,5*j+3);						\
+     KERNEL_CLMB(2,5*j+4);						\
+     fx -= dswx*e;							\
+     fy -= dswy*e;							\
+     fz -= dswz*e;							\
+     gfx_i += fx;							\
+     gfy_i += fy;							\
+     gfz_i += fz;							\
+     gvx_i += fx*dgx;							\
+     gvy_i += fy*dgy;							\
+     gvz_i += fz*dgz;							\
+     fx = fy = fz = e = ZERO;						\
+     KERNEL_CLMB(3,5*j+1);						\
+     KERNEL_CLMB(3,5*j+2);						\
+     KERNEL_CLMB(3,5*j+3);						\
+     KERNEL_CLMB(3,5*j+4);						\
+     fx -= dswx*e;							\
+     fy -= dswy*e;							\
+     fz -= dswz*e;							\
+     gfx_i += fx;							\
+     gfy_i += fy;							\
+     gfz_i += fz;							\
+     gvx_i += fx*dgx;							\
+     gvy_i += fy*dgy;							\
+     gvz_i += fz*dgz;							\
+     fx = fy = fz = e = ZERO;						\
+     KERNEL_CLMB(4,5*j+1);						\
+     KERNEL_CLMB(4,5*j+2);						\
+     KERNEL_CLMB(4,5*j+3);						\
+     KERNEL_CLMB(4,5*j+4);						\
+     fx -= dswx*e;							\
+     fy -= dswy*e;							\
+     fz -= dswz*e;							\
+     gfx_i += fx;							\
+     gfy_i += fy;							\
+     gfz_i += fz;							\
+     gvx_i += fx*dgx;							\
+     gvy_i += fy*dgy;							\
+     gvz_i += fz*dgz;							\
+   }
 
 template <int nsite>
-void ForceCalculator::SwitchingTuning(Molecule *m,Atom *a,const MolTypeList mtl,const dvec3 L,const int nmol,Property& prop){
-  const double rc = rcut;
-  const double rl = rswitch;
-  const double rlc = rl - rc;
-  const double coef = 1.0 / (rlc*rlc*rlc*rlc*rlc);
+void ForceCalculator::SwitchingTuning(Molecule* m,Atom* a,const MolTypeList mtl,const dvec3 L,const int nmol,Property& prop,const int* jstart,const int* jend,const int nlane){
+  const FP rc = rcut;
+  const FP rl = rswitch;
+  const FP rlc = rl - rc;
+  const FP coef = ONE / (rlc*rlc*rlc*rlc*rlc);
 
-  const double rcutSq = rcut*rcut;
+  const FP rcutSq = rcut*rcut;
 
-  double gx[nmol], gy[nmol], gz[nmol];
-  double gfx[nmol],gfy[nmol],gfz[nmol];
-  double gvx[nmol],gvy[nmol],gvz[nmol];
-  double glj[nmol],gcl[nmol];
+  const FP Lx = L[0];
+  const FP Ly = L[1];
+  const FP Lz = L[2];
+  const FP Lxi = ONE/L[0];
+  const FP Lyi = ONE/L[1];
+  const FP Lzi = ONE/L[2];
+#ifdef INSERT_TIMER_FORCE
+  prof.beg(Profiler::Pre);
+#endif
+
+  const int offset = ((nmol + nlane - 1)/nlane)*nlane;
+#ifdef __INTEL_COMPILER
+  if(gx  == nullptr) gx  = (FP*)_mm_malloc(nmol*sizeof(FP),64);
+  if(gy  == nullptr) gy  = (FP*)_mm_malloc(nmol*sizeof(FP),64);
+  if(gz  == nullptr) gz  = (FP*)_mm_malloc(nmol*sizeof(FP),64);
+  if(gfx == nullptr) gfx = (FP*)_mm_malloc(nmol*sizeof(FP),64);
+  if(gfy == nullptr) gfy = (FP*)_mm_malloc(nmol*sizeof(FP),64);
+  if(gfz == nullptr) gfz = (FP*)_mm_malloc(nmol*sizeof(FP),64);
+  if(gvx == nullptr) gvx = (FP*)_mm_malloc(nmol*sizeof(FP),64);
+  if(gvy == nullptr) gvy = (FP*)_mm_malloc(nmol*sizeof(FP),64);
+  if(gvz == nullptr) gvz = (FP*)_mm_malloc(nmol*sizeof(FP),64);
+  if(glj == nullptr) glj = (FP*)_mm_malloc(nmol*sizeof(FP),64);
+  if(gcl == nullptr) gcl = (FP*)_mm_malloc(nmol*sizeof(FP),64);
+#else
+  if(gx  == nullptr) gx  = new FP[nmol];
+  if(gy  == nullptr) gy  = new FP[nmol];
+  if(gz  == nullptr) gz  = new FP[nmol];
+  if(gfx == nullptr) gfx = new FP[nmol];
+  if(gfy == nullptr) gfy = new FP[nmol];
+  if(gfz == nullptr) gfz = new FP[nmol];
+  if(gvx == nullptr) gvx = new FP[nmol];
+  if(gvy == nullptr) gvy = new FP[nmol];
+  if(gvz == nullptr) gvz = new FP[nmol];
+  if(glj == nullptr) glj = new FP[nmol];
+  if(gcl == nullptr) gcl = new FP[nmol];
+#endif
+  assert(gx  != nullptr);
+  assert(gy  != nullptr);
+  assert(gz  != nullptr);
+  assert(gfx != nullptr);
+  assert(gfy != nullptr);
+  assert(gfz != nullptr);
+  assert(gvx != nullptr);
+  assert(gvy != nullptr);
+  assert(gvz != nullptr);
+  assert(glj != nullptr);
+  assert(gcl != nullptr);
   for(int i=0;i<nmol;i++){
-    gx[i] = m[i].r[0];
-    gy[i] = m[i].r[1];
-    gz[i] = m[i].r[2];
-    gfx[i] = gfy[i] = gfz[i] = 0.f;
-    gvx[i] = gvy[i] = gvz[i] = 0.f;
-    glj[i] = gcl[i] = 0.f;
+    gx[i] = m[i].r[0] * L[0];
+    gy[i] = m[i].r[1] * L[1];
+    gz[i] = m[i].r[2] * L[2];
+    gfx[i] = gfy[i] = gfz[i] = ZERO;
+    gvx[i] = gvy[i] = gvz[i] = ZERO;
+    glj[i] = gcl[i] = ZERO;
   }
 
-  const int natom = nsite * nmol;
-  double ax[natom],ay[natom],az[natom];
-  double ae[natom],as[natom];
-  double afx[natom],afy[natom],afz[natom];
-  double charge[natom];
-  int at[natom];
-  for(int i=0;i<natom;i++){
-    ax[i] = a[i].r[0];
-    ay[i] = a[i].r[1];
-    az[i] = a[i].r[2];
-    ae[i] = sqrt(4.0*eps[a[i].t][a[i].t]);
-    as[i] = 0.5*sqrt(sgm[a[i].t][a[i].t]);
-    afx[i] = afy[i] = afz[i] = 0.0;
-    charge[i] = q[a[i].t];
-    at[i] = a[i].t;
-  }
-
+  const int natom = nsite * offset;
+#ifdef __INTEL_COMPILER
+  if(ax  == nullptr) ax  = (FP*)_mm_malloc(natom*sizeof(FP),64);
+  if(ay  == nullptr) ay  = (FP*)_mm_malloc(natom*sizeof(FP),64);
+  if(az  == nullptr) az  = (FP*)_mm_malloc(natom*sizeof(FP),64);
+  if(afx == nullptr) afx = (FP*)_mm_malloc(natom*sizeof(FP),64);
+  if(afy == nullptr) afy = (FP*)_mm_malloc(natom*sizeof(FP),64);
+  if(afz == nullptr) afz = (FP*)_mm_malloc(natom*sizeof(FP),64);
+  if(as  == nullptr) as  = (FP*)_mm_malloc(natom*sizeof(FP),64);
+  if(ae  == nullptr) ae  = (FP*)_mm_malloc(natom*sizeof(FP),64);
+  if(aq  == nullptr) aq  = (FP*)_mm_malloc(natom*sizeof(FP),64);
+#else
+  if(ax  == nullptr) ax  = new FP[natom];
+  if(ay  == nullptr) ay  = new FP[natom];
+  if(az  == nullptr) az  = new FP[natom];
+  if(afx == nullptr) afx = new FP[natom];
+  if(afy == nullptr) afy = new FP[natom];
+  if(afz == nullptr) afz = new FP[natom];
+  if(as  == nullptr) as  = new FP[natom];
+  if(ae  == nullptr) ae  = new FP[natom];
+  if(aq  == nullptr) aq  = new FP[natom];
+#endif
+  assert(ax  != nullptr);
+  assert(ay  != nullptr);
+  assert(az  != nullptr);
+  assert(afx != nullptr);
+  assert(afy != nullptr);
+  assert(afz != nullptr);
+  assert(as  != nullptr);
+  assert(ae  != nullptr);
+  assert(aq  != nullptr);
   for(int i=0;i<nmol;i++){
-    for(int j=0;j<nmol;j++){
-      if(i == j) continue;
-
-      double dgx = (gx[i] - gx[j]) * L[0];
-      double dgy = (gy[i] - gy[j]) * L[1];
-      double dgz = (gz[i] - gz[j]) * L[2];
-      //if(dgx >= 0.5*L[0]) dgx -= L[0];
-      //if(dgx < -0.5*L[0]) dgx += L[0];
-      //if(dgy >= 0.5*L[1]) dgy -= L[1];
-      //if(dgy < -0.5*L[1]) dgy += L[1];
-      if(dgz >= 0.5*L[2]) dgz -= L[2];
-      if(dgz < -0.5*L[2]) dgz += L[2];
-
-      double r02 = dgx*dgx + dgy*dgy + dgz*dgz;
-      if(r02 > rcutSq) continue; // skip molecule outside the cut-off radious
-      double r01 = sqrt(r02);
-      double sw = 1.0, dsw = 0.0;
-      if(r01 > rl){
-	const double r01c = r01 - rc;
-	const double r01l = r01 - rl;
-	sw  = coef*r01c*r01c*r01c*(10.0*r01l*r01l - 5.0*r01l*r01c + r01c*r01c);
-	dsw = coef*30.0*r01c*r01c*r01l*r01l;
-      }
-      double r01i = 1.0 / r01;
-      const double dswx = dgx*(dsw*r01i);
-      const double dswy = dgy*(dsw*r01i);
-      const double dswz = dgz*(dsw*r01i);
-      double fx,fy,fz,e;
-      if
-#if __GNUC__ >= 7
-      constexpr
+    for(int d=0;d<nsite;d++){
+      const int index = nsite*i + d;
+      ax[i+d*offset]  = a[index].r[0] - gx[i];
+      ay[i+d*offset]  = a[index].r[1] - gy[i];
+      az[i+d*offset]  = a[index].r[2] - gz[i];
+      ae[i+d*offset]  = sqrt(4.0*eps[a[index].t][a[index].t]);
+      as[i+d*offset]  = HALF*sqrt(sgm[a[index].t][a[index].t]);
+      aq[i+d*offset]  = q[a[index].t];
+      afx[index] = afy[index] = afz[index] = ZERO;
+    }
+  }
+#ifdef INSERT_TIMER_FORCE
+  prof.end(Profiler::Pre);
 #endif
-      (nsite == 3){
-	fx = fy = fz = e = 0.0;
-	KERNEL_LJ_CLMB(3*i+0,3*j+0);
-	KERNEL_CLMB   (3*i+0,3*j+1);
-	KERNEL_CLMB   (3*i+0,3*j+2);
-	fx -= dswx*e;
-	fy -= dswy*e;
-	fz -= dswz*e;
-	gfx[i] += fx;
-	gfy[i] += fy;
-	gfz[i] += fz;
-	gvx[i] += fx*dgx;
-	gvy[i] += fy*dgy;
-	gvz[i] += fz*dgz;
 
-	fx = fy = fz = e = 0.0;
-	KERNEL_CLMB(3*i+1,3*j+0);
-	KERNEL_CLMB(3*i+1,3*j+1);
-	KERNEL_CLMB(3*i+1,3*j+2);
-	fx -= dswx*e;
-	fy -= dswy*e;
-	fz -= dswz*e;
-	gfx[i] += fx;
-	gfy[i] += fy;
-	gfz[i] += fz;
-	gvx[i] += fx*dgx;
-	gvy[i] += fy*dgy;
-	gvz[i] += fz*dgz;
+#ifdef __INTEL_COMPILER
+  __assume(nlane%(64/sizeof(FP))==0);
+  __assume_aligned(gx,64);
+  __assume_aligned(gy,64);
+  __assume_aligned(gz,64);
+  __assume_aligned(gfx,64);
+  __assume_aligned(gfy,64);
+  __assume_aligned(gfz,64);
+  __assume_aligned(gvx,64);
+  __assume_aligned(gvy,64);
+  __assume_aligned(gvz,64);
+  __assume_aligned(glj,64);
+  __assume_aligned(gcl,64);
 
-	fx = fy = fz = e = 0.0;
-	KERNEL_CLMB(3*i+2,3*j+0);
-	KERNEL_CLMB(3*i+2,3*j+1);
-	KERNEL_CLMB(3*i+2,3*j+2);
-	fx -= dswx*e;
-	fy -= dswy*e;
-	fz -= dswz*e;
-	gfx[i] += fx;
-	gfy[i] += fy;
-	gfz[i] += fz;
-	gvx[i] += fx*dgx;
-	gvy[i] += fy*dgy;
-	gvz[i] += fz*dgz;
-      }
-      if
-#if __GNUC__ >= 7
-      constexpr
+  __assume_aligned(ax,64);
+  __assume_aligned(ay,64);
+  __assume_aligned(az,64);
+  __assume_aligned(afx,64);
+  __assume_aligned(afy,64);
+  __assume_aligned(afz,64);
+  __assume_aligned(as,64);
+  __assume_aligned(ae,64);
+  __assume_aligned(aq,64);
 #endif
-      (nsite == 4){
-	fx = fy = fz = e = 0.0;
-	KERNEL_LJ(4*i+0,4*j+0);
-	fx -= dswx*e;
-	fy -= dswy*e;
-	fz -= dswz*e;
-	gfx[i] += fx;
-	gfy[i] += fy;
-	gfz[i] += fz;
-	gvx[i] += fx*dgx;
-	gvy[i] += fy*dgy;
-	gvz[i] += fz*dgz;
 
-	fx = fy = fz = e = 0.0;
-	KERNEL_CLMB(4*i+1,4*j+1);
-	KERNEL_CLMB(4*i+1,4*j+2);
-	KERNEL_CLMB(4*i+1,4*j+3);
-	fx -= dswx*e;
-	fy -= dswy*e;
-	fz -= dswz*e;
-	gfx[i] += fx;
-	gfy[i] += fy;
-	gfz[i] += fz;
-	gvx[i] += fx*dgx;
-	gvy[i] += fy*dgy;
-	gvz[i] += fz*dgz;
-
-	fx = fy = fz = e = 0.0;
-	KERNEL_CLMB(4*i+2,4*j+1);
-	KERNEL_CLMB(4*i+2,4*j+2);
-	KERNEL_CLMB(4*i+2,4*j+3);
-	fx -= dswx*e;
-	fy -= dswy*e;
-	fz -= dswz*e;
-	gfx[i] += fx;
-	gfy[i] += fy;
-	gfz[i] += fz;
-	gvx[i] += fx*dgx;
-	gvy[i] += fy*dgy;
-	gvz[i] += fz*dgz;
-
-	fx = fy = fz = e = 0.0;
-	KERNEL_CLMB(4*i+3,4*j+1);
-	KERNEL_CLMB(4*i+3,4*j+2);
-	KERNEL_CLMB(4*i+3,4*j+3);
-	fx -= dswx*e;
-	fy -= dswy*e;
-	fz -= dswz*e;
-	gfx[i] += fx;
-	gfy[i] += fy;
-	gfz[i] += fz;
-	gvx[i] += fx*dgx;
-	gvy[i] += fy*dgy;
-	gvz[i] += fz*dgz;
-      }
-      if
-#if __GNUC__ >= 7
-      constexpr
+#ifdef INSERT_TIMER_FORCE
+  prof.beg(Profiler::Force);
 #endif
-      (nsite == 5){
-	fx = fy = fz = e = 0.0;
-	KERNEL_LJ(5*i+0,5*j+0);
-	fx -= dswx*e;
-	fy -= dswy*e;
-	fz -= dswz*e;
-	gfx[i] += fx;
-	gfy[i] += fy;
-	gfz[i] += fz;
-	gvx[i] += fx*dgx;
-	gvy[i] += fy*dgy;
-	gvz[i] += fz*dgz;
+  for(int iv=0;iv<(nmol/nlane)*nlane;iv+=nlane){
+    const int js = jstart[iv/nlane];
+    int je = jend[iv/nlane];
+    if(js>=je) je += nmol;
+#pragma omp simd
+    for(int ii=0;ii<nlane;ii++){
+      const int i = iv + ii;
 
-	fx = fy = fz = e = 0.0;
-	KERNEL_CLMB(5*i+1,5*j+1);
-	KERNEL_CLMB(5*i+1,5*j+2);
-	KERNEL_CLMB(5*i+1,5*j+3);
-	KERNEL_CLMB(5*i+1,5*j+4);
-	fx -= dswx*e;
-	fy -= dswy*e;
-	fz -= dswz*e;
-	gfx[i] += fx;
-	gfy[i] += fy;
-	gfz[i] += fz;
-	gvx[i] += fx*dgx;
-	gvy[i] += fy*dgy;
-	gvz[i] += fz*dgz;
+      const FP gx_i = gx[i];
+      const FP gy_i = gy[i];
+      const FP gz_i = gz[i];
+      FP gfx_i = ZERO;
+      FP gfy_i = ZERO;
+      FP gfz_i = ZERO;
+      FP gvx_i = ZERO;
+      FP gvy_i = ZERO;
+      FP gvz_i = ZERO;
+      FP glj_i = ZERO;
+      FP gcl_i = ZERO;
 
-	fx = fy = fz = e = 0.0;
-	KERNEL_CLMB(5*i+2,5*j+1);
-	KERNEL_CLMB(5*i+2,5*j+2);
-	KERNEL_CLMB(5*i+2,5*j+3);
-	KERNEL_CLMB(5*i+2,5*j+4);
-	fx -= dswx*e;
-	fy -= dswy*e;
-	fz -= dswz*e;
-	gfx[i] += fx;
-	gfy[i] += fy;
-	gfz[i] += fz;
-	gvx[i] += fx*dgx;
-	gvy[i] += fy*dgy;
-	gvz[i] += fz*dgz;
-
-	fx = fy = fz = e = 0.0;
-	KERNEL_CLMB(5*i+3,5*j+1);
-	KERNEL_CLMB(5*i+3,5*j+2);
-	KERNEL_CLMB(5*i+3,5*j+3);
-	KERNEL_CLMB(5*i+3,5*j+4);
-	fx -= dswx*e;
-	fy -= dswy*e;
-	fz -= dswz*e;
-	gfx[i] += fx;
-	gfy[i] += fy;
-	gfz[i] += fz;
-	gvx[i] += fx*dgx;
-	gvy[i] += fy*dgy;
-	gvz[i] += fz*dgz;
-
-	fx = fy = fz = e = 0.0;
-	KERNEL_CLMB(5*i+4,5*j+1);
-	KERNEL_CLMB(5*i+4,5*j+2);
-	KERNEL_CLMB(5*i+4,5*j+3);
-	KERNEL_CLMB(5*i+4,5*j+4);
-	fx -= dswx*e;
-	fy -= dswy*e;
-	fz -= dswz*e;
-	gfx[i] += fx;
-	gfy[i] += fy;
-	gfz[i] += fz;
-	gvx[i] += fx*dgx;
-	gvy[i] += fy*dgy;
-	gvz[i] += fz*dgz;
+      FP ax_i[nsite];
+      FP ay_i[nsite];
+      FP az_i[nsite];
+      FP q_i[nsite];
+      FP e_i[nsite];
+      FP s_i[nsite];
+      FP afx_i[nsite];
+      FP afy_i[nsite];
+      FP afz_i[nsite];
+      for(int d=0;d<nsite;d++){
+	ax_i[d] = ax[i + d*offset];
+	ay_i[d] = ay[i + d*offset];
+	az_i[d] = az[i + d*offset];
+	q_i[d] =  aq[i + d*offset];
+	e_i[d] =  ae[i + d*offset];
+	s_i[d] =  as[i + d*offset];
+	afx_i[d] = afy_i[d] = afz_i[d] = ZERO;
       }
-    }// j roop
-  }// i roop
 
-  prop.vir = 0.0;
-  prop.lj = prop.clmb = 0.0;
+      for(int jj = js; jj<=je; jj++){
+	int j = jj % nmol;
+	INNER_MOST_LOOP;
+      }
+      for(int d=0;d<nsite;d++){
+	afx[i+d*offset] = afx_i[d];
+	afy[i+d*offset] = afy_i[d];
+	afz[i+d*offset] = afz_i[d];
+      }
+      gfx[i] = gfx_i;
+      gfy[i] = gfy_i;
+      gfz[i] = gfz_i;
+      gvx[i] = gvx_i;
+      gvy[i] = gvy_i;
+      gvz[i] = gvz_i;
+      gcl[i] = gcl_i;
+      glj[i] = glj_i;
+    } // ii loop
+  }// iv loop
+  // tail loop
+  for(int i=(nmol/nlane)*nlane;i<nmol;i++){
+    const int js = jstart[i/nlane];
+    int je = jend[i/nlane];
+    if(js>=je) je += nmol;
+
+    const FP gx_i = gx[i];
+    const FP gy_i = gy[i];
+    const FP gz_i = gz[i];
+    FP gfx_i = ZERO;
+    FP gfy_i = ZERO;
+    FP gfz_i = ZERO;
+    FP gvx_i = ZERO;
+    FP gvy_i = ZERO;
+    FP gvz_i = ZERO;
+    FP glj_i = ZERO;
+    FP gcl_i = ZERO;
+
+    FP ax_i[nsite];
+    FP ay_i[nsite];
+    FP az_i[nsite];
+    FP q_i[nsite];
+    FP e_i[nsite];
+    FP s_i[nsite];
+    FP afx_i[nsite];
+    FP afy_i[nsite];
+    FP afz_i[nsite];
+    for(int d=0;d<nsite;d++){
+      ax_i[d] = ax[i + d*offset];
+      ay_i[d] = ay[i + d*offset];
+      az_i[d] = az[i + d*offset];
+      q_i[d] =  aq[i + d*offset];
+      e_i[d] =  ae[i + d*offset];
+      s_i[d] =  as[i + d*offset];
+      afx_i[d] = afy_i[d] = afz_i[d] = ZERO;
+    }
+    for(int jj=js; jj<=je; jj++){
+      const int j = jj%nmol;
+      INNER_MOST_LOOP;
+    }// j loop
+    for(int d=0;d<nsite;d++){
+      afx[i+d*offset] = afx_i[d];
+      afy[i+d*offset] = afy_i[d];
+      afz[i+d*offset] = afz_i[d];
+    }
+    gfx[i] = gfx_i;
+    gfy[i] = gfy_i;
+    gfz[i] = gfz_i;
+    gvx[i] = gvx_i;
+    gvy[i] = gvy_i;
+    gvz[i] = gvz_i;
+    gcl[i] = gcl_i;
+    glj[i] = glj_i;
+  }// i loop
+#ifdef INSERT_TIMER_FORCE
+  prof.end(Profiler::Force);
+#endif
+
+#ifdef INSERT_TIMER_FORCE
+  prof.beg(Profiler::Post);
+#endif
   for(int i=0;i<nmol;i++){
     m[i].f[0] = gfx[i];
     m[i].f[1] = gfy[i];
     m[i].f[2] = gfz[i];
-
+  }
+  prop.vir = 0.0;
+  prop.lj = prop.clmb = 0.0;
+  for(int i=0;i<nmol;i++){
     prop.lj   += glj[i];
     prop.clmb += gcl[i];
 
@@ -1084,27 +1321,33 @@ void ForceCalculator::SwitchingTuning(Molecule *m,Atom *a,const MolTypeList mtl,
     prop.vir[1] += gvy[i];
     prop.vir[2] += gvz[i];
   }
-  prop.lj *= 0.5;
+  prop.lj   *= 0.5;
   prop.clmb *= 0.5;
-  prop.vir *= 0.5;
+  prop.vir  *= 0.5;
 
-  for(int i=0;i<natom;i++){
-    a[i].f[0] = afx[i];
-    a[i].f[1] = afy[i];
-    a[i].f[2] = afz[i];
+  for(int i=0;i<nmol;i++){
+    for(int d=0;d<nsite;d++){
+      a[nsite*i+d].f[0] = afx[i+d*offset];
+      a[nsite*i+d].f[1] = afy[i+d*offset];
+      a[nsite*i+d].f[2] = afz[i+d*offset];
+    }
   }
+#ifdef INSERT_TIMER_FORCE
+  prof.end(Profiler::Post);
+#endif
+
 }
 #undef KERNEL_LJ_CLMB
 #undef KERNEL_CLMB
 
-void ForceCalculator::Switching3site(Molecule *m,Atom *a,const MolTypeList mtl,const dvec3 L,const int nmol,Property& prop){
-  SwitchingTuning<3>(m,a,mtl,L,nmol,prop);
+void ForceCalculator::Switching3site(Molecule *m,Atom *a,const MolTypeList mtl,const dvec3 L,const int nmol,Property& prop,const int* js,const int* je,const int nlane){
+  SwitchingTuning<3>(m,a,mtl,L,nmol,prop,js,je,nlane);
 }
-void ForceCalculator::Switching4site(Molecule *m,Atom *a,const MolTypeList mtl,const dvec3 L,const int nmol,Property& prop){
-  SwitchingTuning<4>(m,a,mtl,L,nmol,prop);
+void ForceCalculator::Switching4site(Molecule *m,Atom *a,const MolTypeList mtl,const dvec3 L,const int nmol,Property& prop,const int* js,const int* je,const int nlane){
+  SwitchingTuning<4>(m,a,mtl,L,nmol,prop,js,je,nlane);
 }
-void ForceCalculator::Switching5site(Molecule *m,Atom *a,const MolTypeList mtl,const dvec3 L,const int nmol,Property& prop){
-  SwitchingTuning<5>(m,a,mtl,L,nmol,prop);
+void ForceCalculator::Switching5site(Molecule *m,Atom *a,const MolTypeList mtl,const dvec3 L,const int nmol,Property& prop,const int* js,const int* je,const int nlane){
+  SwitchingTuning<5>(m,a,mtl,L,nmol,prop,js,je,nlane);
 }
 
 
