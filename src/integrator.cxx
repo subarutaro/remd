@@ -113,7 +113,7 @@ void Molecules::D4(){
   //* for p constant
   if(((MODE>>PSHIFT)&MASK)==1){
     if(((MODE>>TSHIFT)&MASK)==1){
-      tst->Ps -= 0.5*bst->Pv[0]*bst->Pv[0]/bst->W*dthalf;
+      tst->Ps -= bst->Pv[0]*bst->Pv[0]/bst->W*dthalf;
     }
     double V = Molecules::GetVolume();
     L = powf(V + bst->Pv[0]*tst->s/bst->W*dthalf,1./3.);
@@ -122,11 +122,11 @@ void Molecules::D4(){
     if(((MODE>>TSHIFT)&MASK)==1){
       tst->Ps -= 0.5 * bst->Pv[2] * bst->Pv[2] / bst->W * dthalf;
     }
-    L[2] += 0.5 * tst->s * bst->Pv[2] / bst->W * dthalf;
+    L[2] += tst->s * bst->Pv[2] / bst->W * dthalf;
   }
   if(((MODE>>PSHIFT)&MASK)==3){
     if(((MODE>>TSHIFT)&MASK)==1){
-      tst->Ps -= 0.5*(bst->Pv[0]*bst->Pv[0] + bst->Pv[1]*bst->Pv[1])/bst->W*dthalf;
+      tst->Ps -= (bst->Pv[0]*bst->Pv[0] + bst->Pv[1]*bst->Pv[1])/bst->W*dthalf;
     }
     L[0] += bst->Pv[0]*tst->s/bst->W*dthalf;
     L[1] += bst->Pv[1]*tst->s/bst->W*dthalf;
