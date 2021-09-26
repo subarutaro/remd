@@ -22,6 +22,7 @@ class InputParam{
  public:
   int  nmol;
   int  natom;
+  char ipfx[256];
   char igro[256];  // input gro file name
   char itrr[256];  // input trr file name
   char ichk[256];  // input check point file
@@ -86,11 +87,11 @@ class IOManager{
   void     ReadInputs(Molecule*,Thermostat*,Barostat*,MolTypeList,const int,const int,dvec3&,Property&);
   void     ReadInputs(Molecules* m){ReadInputs(m->mlcl,m->tst,m->bst,m->mlist,m->nmol,m->natom,m->L,m->prop);};
 
-  void     UpdateOutputs(const Molecule*,const Thermostat*,const Barostat*,const Property,const dvec3,MolTypeList);
-  void     UpdateOutputs(const Molecules* m){UpdateOutputs(m->mlcl,m->tst,m->bst,m->prop,m->L,m->mlist);};
+  void     UpdateOutputs(const Molecule*,const Thermostat*,const Barostat*,const Property,const dvec3,MolTypeList,const int);
+  void     UpdateOutputs(const Molecules* m,const int index){UpdateOutputs(m->mlcl,m->tst,m->bst,m->prop,m->L,m->mlist,index);};
   void     WriteCDV(const Molecule*,const MolTypeList,const dvec3,const long);
   void     WriteCDV(const Molecules* m,const long s){WriteCDV(m->mlcl,m->mlist,m->L,s);};
-  void     WriteCheckPoint(const Molecule*,const Thermostat*,const Barostat*,const dvec3,const Property);
+  void     WriteCheckPoint(const Molecule*,const Thermostat*,const Barostat*,const dvec3,const Property,const int);
 
   int      GetNumberOfMolecules(){return nmol;};
   //dvec3    GetSytemSize(){return L;};

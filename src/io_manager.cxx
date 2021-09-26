@@ -89,6 +89,9 @@ InputParam::InputParam(const Parameter param){
   nmol = param.nmol;
   natom = param.natom;
 
+  //sprintf(ipfx,"%s",param.input_prefix.c_str());
+  //sprintf(opfx,"%s",param.output_prefix.c_str());
+
   if(param.gro_in!="null"){
     sprintf(igro,"%s",(param.input_prefix+param.gro_in+".gro").c_str());
   }else{
@@ -134,7 +137,8 @@ InputParam::InputParam(const Parameter param){
     sprintf(otrr,"%s",param.trr_out.c_str());
   }
   if(param.chk_out!="null"){
-    sprintf(ochk,"%s",(param.output_prefix+param.chk_out+".chk").c_str());
+    //sprintf(ochk,"%s",(param.output_prefix+param.chk_out+".chk").c_str());
+    sprintf(ochk,"%s",(param.output_prefix+param.chk_out).c_str());
   }else{
     sprintf(ochk,"%s",param.chk_out.c_str());
   }
@@ -591,15 +595,19 @@ void IOManager::WriteCheckPoint
  const Thermostat *tst,
  const Barostat   *bst,
  const dvec3      L,
- const Property   prop
+ const Property   prop,
+ const int        index
 )
 {
   //std::ostream *is;
   //s = new std::iostream(std::cout.rdbuf());
   //s = new std::ofstream(filename.c_str(),std::ios_base::out);
-
+  fprintf(stdout,"WriteCheckPoint\n");
+  std::stringstream filename;
+  filename << iprm->ochk << std::setw(4) << std::setfill('0') << index << ".chk";
+  std::cout << filename.str() << std::endl;
   std::ostream *ofs;
-  ofs = new std::ofstream(iprm->ochk,std::ios_base::out);
+  ofs = new std::ofstream(filename.str(),std::ios_base::out);
 
   *ofs << nmol << " " << natom << std::endl;
   for(int i=0;i<nmol;i++){
@@ -632,7 +640,8 @@ void IOManager::UpdateOutputs
  const Barostat   *bst,
  const Property   prop,
  const dvec3      L,
- MolTypeList      mtype
+ MolTypeList      mtype,
+ const int index
  ){
   const double A_to_nm = 0.1;
   atom = (AtomGro*)malloc(natom*sizeof(AtomGro));
@@ -642,7 +651,7 @@ void IOManager::UpdateOutputs
   if(strcmp(iprm->otrr,"null"))
     UpdateTrrOutput(L*A_to_nm);
   if(strcmp(iprm->ochk,"null"))
-    WriteCheckPoint(mlcl,tst,bst,L,prop);
+    WriteCheckPoint(mlcl,tst,bst,L,prop,index);
 
   free(atom);
 };
