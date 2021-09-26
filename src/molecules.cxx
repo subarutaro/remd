@@ -461,6 +461,8 @@ void Molecules::CalcForcePot(){
   prof.beg(Profiler::Sort);
   std::sort(mlcl,mlcl+nmol,[](const Molecule& a,const Molecule& b){return a.r[2] < b.r[2];});
   prof.end(Profiler::Sort);
+
+  prof.beg(Profiler::Neigh);
   //printf("making jstart & jend\n");
   constexpr int nsimd = 64 / sizeof(FP);
   //constexpr int nlane = nsimd*2;
@@ -492,6 +494,7 @@ void Molecules::CalcForcePot(){
     assert(0 <= e && e < nmol);
     //printf("(js,je)= %d %d\n",s,e);
   }
+  prof.end(Profiler::Neigh);
   //printf("gen neighbor list finished\n");
 #endif
 #endif

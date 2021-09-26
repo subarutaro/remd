@@ -15,11 +15,11 @@ class Profiler{
     D6,
     CalcForce,
     Sort,
+    Neigh,
     M2A,
     Switching,
 #ifdef INSERT_TIMER_FORCE
     Pre,
-    Neigh,
     Force,
     Post,
 #endif
@@ -37,11 +37,11 @@ class Profiler{
     "D6    ",
     "Force ",
     "  Sort  ",
+    "  Neigh ",
     "  M2A   ",
     "  Nb    ",
 #ifdef INSERT_TIMER_FORCE
     "    Pre  ",
-    "    Neigh ",
     "    Force ",
     "    Post  ",
 #endif
