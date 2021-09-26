@@ -2,6 +2,9 @@
 
 #include <cassert>
 
+#ifdef ENABLE_MPI
+#include <mpi.h>
+#endif
 //===================== class Histogram ========================
 Histogram::Histogram(I _vnum,I _pnum){
   vnum = _vnum;
@@ -135,21 +138,31 @@ static void read(char *target,FILE *fp){
 };
 
 REMDInfo::REMDInfo(const Parameter _p){
+  printf("=== REMDInfo::REMDInfo ===\n");
+
   nmol = _p.nmol;
   step_max = _p.ninterval*_p.interval;
   interval = _p.interval;
-
-  nproc = _p.nprocs;
+#ifdef ENABLE_MPI
+  MPI_Comm_size(MPI_COMM_WORLD,&nproc);
+  MPI_Comm_rank(MPI_COMM_WORLD,&rank);
+#else
+  nproc = 1;
+  rank = 0;
+#endif
   ngpu  = _p.ngpus;
 
   sprintf(input_dir,"%s",_p.input_prefix.c_str());
   sprintf(output_dir,"%s",_p.output_prefix.c_str());
 
-  nreplica = _p.nreplica;
+  nreplica_global = _p.nreplica;
+  assert(nreplica_global % nproc == 0);
+  nreplica = _p.nreplica / nproc;
+
   dim_temp = _p.ntemp;
   dim_press = _p.npress;
-  if(nreplica != (dim_temp*dim_press)){
-    fprintf(stderr,"error: nreplica must be equal to DimTemp*DimPress\n");
+  if(nreplica_global != (dim_temp*dim_press)){
+    fprintf(stderr,"error: # of replicas must be equal to DimTemp*DimPress\n");
     exit(EXIT_FAILURE);
   }
   temperature_max = _p.temp_max  / unit_temp; // [K]
@@ -176,63 +189,117 @@ REMDInfo::REMDInfo(const Parameter _p){
 
   restart = _p.restart;
 
-  int cond_mode = _p.cond_mode;
-
-  histogram = new Histogram*[nreplica];
-  tc = new TunnelCount*[nreplica];
-  for(int i=0;i<nreplica;++i){
-    histogram[i] = new Histogram(NUM_VOL,NUM_POT);
-    tc[i] = new TunnelCount();
-  }
   ec_type = 0;
   if(dim_temp==1) ec_type = 1;
-  pairlist = new ExchangeList(dim_temp,dim_press);
 
-  index       = new I[nreplica];
-  for(int i=0;i<nreplica;++i) index[i]=i;
-  temperature = new D[nreplica];
-  pressure    = new D[nreplica];
-  if(cond_mode == 0){
-    SetConditionGeometrical(dim_temp,dim_press);
-  }else if(cond_mode == 1){
-    char cond_file[256];
-    sprintf(cond_file,"%s/phys_value.dat",input_dir);
-    SetConditionGeometrical(dim_temp,dim_press);
-    SetConditionFromHeatCapacity(cond_file,dim_temp,dim_press,true);
-  }else if(cond_mode == 2){
-    char cond_file[256];
-    sprintf(cond_file,"%s/condition.dat",input_dir);
-    SetConditionGeometrical(dim_temp,dim_press);
-    SetConditionFromFile(cond_file,dim_temp,dim_press);
-  }else if(cond_mode == 3){
-    char cond_file[256];
-    SetConditionArithmetic(dim_temp,dim_press);
-  }else if(cond_mode == 4){
-    char cond_file[256];
-    sprintf(cond_file,"%s/phys_value.dat",input_dir);
-    SetConditionGeometrical(dim_temp,dim_press);
-    SetConditionFromHeatCapacity(cond_file,dim_temp,dim_press,false);
+  MPI_Barrier(MPI_COMM_WORLD);
+  if(rank == 0){
+    int cond_mode = _p.cond_mode;
+    histogram = new Histogram*[nreplica_global];
+    tc = new TunnelCount*[nreplica_global];
+    for(int i=0;i<nreplica_global;++i){
+      histogram[i] = new Histogram(NUM_VOL,NUM_POT);
+      tc[i] = new TunnelCount();
+    }
+
+    pairlist = new ExchangeList(dim_temp,dim_press);
+
+    index       = new I[nreplica_global];
+    temperature = new D[nreplica_global];
+    pressure    = new D[nreplica_global];
+    isExchanged = new bool[nreplica_global];
+    for(int i=0;i<nreplica_global;++i) index[i]=i;
+    for(int i=0;i<nreplica_global;++i) isExchanged[i]=false;
+
+    assert(dim_temp * dim_press == nreplica_global);
+    if(cond_mode == 0){
+      SetConditionGeometrical(dim_temp,dim_press);
+    }else if(cond_mode == 1){
+      char cond_file[256];
+      sprintf(cond_file,"%s/phys_value.dat",input_dir);
+      SetConditionGeometrical(dim_temp,dim_press);
+      SetConditionFromHeatCapacity(cond_file,dim_temp,dim_press,true);
+    }else if(cond_mode == 2){
+      char cond_file[256];
+      sprintf(cond_file,"%s/condition.dat",input_dir);
+      SetConditionGeometrical(dim_temp,dim_press);
+      SetConditionFromFile(cond_file,dim_temp,dim_press);
+    }else if(cond_mode == 3){
+      char cond_file[256];
+      SetConditionArithmetic(dim_temp,dim_press);
+    }else if(cond_mode == 4){
+      char cond_file[256];
+      sprintf(cond_file,"%s/phys_value.dat",input_dir);
+      SetConditionGeometrical(dim_temp,dim_press);
+      SetConditionFromHeatCapacity(cond_file,dim_temp,dim_press,false);
+    }else{
+      std::cerr << "error: set cond_mode 0, 1 or 2" << std::endl;
+      exit(EXIT_FAILURE);
+    }
   }else{
-    std::cerr << "error: set cond_mode 0, 1 or 2" << std::endl;
-    exit(EXIT_FAILURE);
+    printf("%d: receive index, temperature and pressure\n",rank);
+    index       = new I[nreplica];
+    temperature = new D[nreplica];
+    pressure    = new D[nreplica];
+    isExchanged = new bool[nreplica];
   }
+  BroadcastConditionAndIndex();
 
-  isExchanged = new bool[nreplica];
-  for(int i=0;i<nreplica;++i) isExchanged[i]=false;
-
+  if(rank == 0){
+    printf("Conditions at master rank:\n");
+    for(int i=0;i<nreplica_global;i++){
+      printf("%d %d %lf %lf\n",i,index[i],temperature[i],pressure[i]);
+    }
+  }
+  for(int i=0;i<nproc;i++){
+    MPI_Barrier(MPI_COMM_WORLD);
+    if(rank == i){
+      if(i==0) printf("Conditions at each rank:\n");
+      for(int i=0;i<nreplica;i++){
+	printf("%d: %d %d %lf %lf\n",rank,i,index[i],temperature[i],pressure[i]);
+      }
+    }
+  }
 }
 
+void REMDInfo::BroadcastConditionAndIndex(){
+  MPI_Barrier(MPI_COMM_WORLD);
+#ifdef ENABLE_MPI
+  if(rank == 0){
+    // broadcast index, temperature, pressure
+    //printf("0: broadcast index, temperature and pressure\n");
+    MPI_Request req[nproc];
+    MPI_Status  stat[nproc];
+    for(int i=1; i<nproc;i++) MPI_Isend(index      +i*nreplica,nreplica,MPI_INT,   i,i+0*nproc,MPI_COMM_WORLD,&req[i-1]);
+    MPI_Waitall(nproc-1,req,stat);
+    for(int i=1; i<nproc;i++) MPI_Isend(temperature+i*nreplica,nreplica,MPI_DOUBLE,i,i+1*nproc,MPI_COMM_WORLD,&req[i-1]);
+    MPI_Waitall(nproc-1,req,stat);
+    for(int i=1; i<nproc;i++) MPI_Isend(pressure   +i*nreplica,nreplica,MPI_DOUBLE,i,i+2*nproc,MPI_COMM_WORLD,&req[i-1]);
+    MPI_Waitall(nproc-1,req,stat);
+    for(int i=1; i<nproc;i++) MPI_Isend(isExchanged+i*nreplica,nreplica,MPI_C_BOOL,i,i+3*nproc,MPI_COMM_WORLD,&req[i-1]);
+    MPI_Waitall(nproc-1,req,stat);
+ }else{
+    //printf("%d: receive index, temperature and pressure\n",rank);
+    // recv index, temperature, pressure
+    MPI_Recv(index,      nreplica,MPI_INT,   0,rank+0*nproc,MPI_COMM_WORLD,NULL);
+    MPI_Recv(temperature,nreplica,MPI_DOUBLE,0,rank+1*nproc,MPI_COMM_WORLD,NULL);
+    MPI_Recv(pressure,   nreplica,MPI_DOUBLE,0,rank+2*nproc,MPI_COMM_WORLD,NULL);
+    MPI_Recv(isExchanged,nreplica,MPI_C_BOOL,0,rank+3*nproc,MPI_COMM_WORLD,NULL);
+  }
+#endif
+}
 
 REMDInfo::~REMDInfo(){
   printf("===destruct REMDInfo===\n");
-  delete pressure;
-  delete temperature;
-  delete index;
+  delete[] pressure;
+  delete[] temperature;
+  delete[] index;
 
   delete pairlist;
-
-  for(int i=0;i<nreplica;++i) delete histogram[i];
-  delete[] histogram;
+  if(rank == 0){
+    for(int i=0;i<nreplica;++i) delete[] histogram[i];
+    delete[] histogram;
+  }
 
 };
 
@@ -463,7 +530,7 @@ void REMDInfo::SetConditionFromHeatCapacity(std::string filename,I dim_temp,I di
     temperature[(j+1)*dim_temp-1] = temperature_max;
   }
 
-  for(int i=0;i<nreplica;i++){
+  for(int i=0;i<nreplica_global;i++){
    std::cout << "rep" << i << ": " << temperature[i] << " " << pressure[i] << std::endl;
   }
 
@@ -524,7 +591,7 @@ void REMDInfo::SetConditionFromHeatCapacity2(std::string filename,I dim_temp,I d
     }
   }
 
-  for(int i=0;i<nreplica;i++){
+  for(int i=0;i<nreplica_global;i++){
    std::cout << "rep" << i << ": " << temperature[i] << " " << pressure[i] << std::endl;
   }
 

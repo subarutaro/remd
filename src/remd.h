@@ -61,7 +61,8 @@ class REMD{
   void OutputBinary();
 
 public:
-  REMD();
+  REMD(){};
+  REMD(std::string);
 //REMD(char *inputfile);
   ~REMD();
 
@@ -80,6 +81,9 @@ public:
 
   //debug function
   void OutputDebugInfo();
+
+  // for MPI
+  void GatherResult();
 };
 
 #endif

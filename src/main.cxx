@@ -1,10 +1,23 @@
-#include "molecular_dynamics.h"
 #include "remd.h"
+
+#include <string>
+
+#ifdef ENABLE_MPI
+#include <mpi.h>
+#endif
+
 #if 1
 int main(int argc,char **argv){
+#ifdef ENABLE_MPI
+  MPI_Init(&argc,&argv);
+#endif
   //MolecularDynamics md(argc,argv);
-  REMD md;
+  std::string filename = argv[1];
+  REMD md(filename);
   md.ExecuteREMD();
+#ifdef ENABLE_MPI
+  MPI_Finalize();
+#endif
   return 0;
 };
 #else //test

@@ -224,6 +224,7 @@ class REMDInfo{
 
   I nmol;
   I nreplica;
+  I nreplica_global; // for MPI
 
   D temperature_max;
   D temperature_min;
@@ -242,6 +243,7 @@ class REMDInfo{
   I ensemble;
 
   I nproc;
+  I rank;
   I ngpu;
 
   I mode;
@@ -295,10 +297,19 @@ class REMDInfo{
   REMDInfo(const Parameter param);
   ~REMDInfo();
   void IncrementHistogram(D vol,D pot,I ind){
-    assert(vol > volume_min);
-    assert(vol < volume_max);
-    assert(pot > energy_min);
-    assert(pot < energy_max);
+    if(vol <  volume_min ||
+       vol >= volume_max ||
+       pot <  energy_min ||
+       pot >= energy_max ){
+      fprintf(stderr,"error: potential energy or volume is not in the histogram range\n");
+      fprintf(stderr,"       energy must be %lf <= %lf < %lf\n",energy_min,pot,energy_max);
+      fprintf(stderr,"       volume must be %lf <= %lf < %lf\n",volume_min,vol,volume_max);
+      fflush(stderr);
+      assert(vol >= volume_min && vol < volume_max);
+      assert(pot >= energy_min && pot < energy_max);
+      exit(EXIT_FAILURE);
+    }
+
 #ifdef LOG_SAMPLING
     int v = (I)(log(vol - volume_min) / delta_volume);
     int p = (I)(log(pot - energy_min) / delta_energy);
@@ -392,12 +403,15 @@ class REMDInfo{
   void SetTemperature(I ind,D T){temperature[ind]=T;};
   void SetPressure(I ind,D P){pressure[ind]=P;};
   void SetAllIsExchanged(bool b){for(int i=0;i<nreplica;i++) isExchanged[i]=b;};
+  void SetAllIsExchangedGlobal(bool b){for(int i=0;i<nreplica_global;i++) isExchanged[i]=b;};
   
   //getter
   I GetNmol(){return nmol;};
   unsigned long GetStepMax(){return step_max;};
   unsigned long GetInterval(){return interval;};
   I GetNumReplica(){return nreplica;};
+  I GetNumReplicaGlobal(){return nreplica_global;};
+  I GetReplicaOffset(){ return rank * nreplica; }
   D GetTemperatureMax(){return temperature_max;};
   D GetTemperatureMin(){return temperature_min;};
   D GetPressureMax(){return pressure_max;};
@@ -408,6 +422,7 @@ class REMDInfo{
   D GetVolumeMax(){return volume_max;};
   D GetVolumeMin(){return volume_min;};
   I GetNumProc(){return nproc;};
+  I GetRank(){return rank;};
   I GetNumGPU(){return ngpu;};
   I GetMode(){return mode;};
   I GetEnsemble(){return ensemble;};
@@ -431,6 +446,8 @@ class REMDInfo{
   Average GetAverages(I,I);
 
   void ReadTemperatureFromFile(char *filename);
+
+  void BroadcastConditionAndIndex();
 
   void ShowAll();
 };

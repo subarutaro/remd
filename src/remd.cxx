@@ -8,187 +8,190 @@
 #include "mdunit.h"
 #include "remd.h"
 
+#ifdef ENABLE_MPI
+#include <mpi.h>
+#endif
+
 //===================== class REMD ======================
 //===================== (de)constructor of REMD ======================
 
-REMD::REMD(){
-  printf("====construct class REMD====\n");
-  param.read(std::cin);
+void Abort(const int ret = 0){
+#ifdef ENABLE_MPI
+  MPI_Finalize();
+  exit(ret);
+#endif
+}
+
+REMD::REMD(std::string input){
+  std::ifstream ifs(input);
+  param.read(ifs);
   param.print(std::cout);
 
   remdinfo = new REMDInfo(param);
-  const I nreplica = remdinfo->GetNumReplica();
 
+  const I nreplica = remdinfo->GetNumReplica();
+  const I offset   = remdinfo->GetReplicaOffset(); // for MPI
+
+  assert(!(param.confined == 1 && (param.pconstant == 1 || param.pconstant == 3)));
+  assert(!(param.confined == 2 && (param.pconstant == 1 || param.pconstant == 2)));
 
   if(param.ninterval > 0){
-  //struct pointer of pointer *md
-  md = new Molecules*[nreplica];
-  iomngr = new IOManager*[nreplica];
-  for(int i=0;i<nreplica;i++){
-    std::stringstream strs;
-    strs << std::setw(4) << std::setfill('0') << i;
-    Parameter p = param;
-    if(p.gro_in  != "null") p.gro_in  += strs.str();
-    if(p.trr_in  != "null") p.trr_in  += strs.str();
-    if(p.chk_in  != "null") p.chk_in  += strs.str();
-    if(p.tkw_in  != "null") p.tkw_in  += strs.str();
-    if(p.xyz_in  != "null") p.xyz_in  += strs.str();
-    if(p.cdv_in  != "null") p.cdv_in  += strs.str();
+    //struct pointer of pointer *md
+    md = new Molecules*[nreplica];
+    iomngr = new IOManager*[nreplica];
+    for(int i=0;i<nreplica;i++){
+      std::stringstream strs;
+      strs << std::setw(4) << std::setfill('0') << i+offset;
+      Parameter p = param;
+      if(p.gro_in  != "null") p.gro_in  += strs.str();
+      if(p.trr_in  != "null") p.trr_in  += strs.str();
+      if(p.chk_in  != "null") p.chk_in  += strs.str();
+      if(p.tkw_in  != "null") p.tkw_in  += strs.str();
+      if(p.xyz_in  != "null") p.xyz_in  += strs.str();
+      if(p.cdv_in  != "null") p.cdv_in  += strs.str();
 
-    if(p.gro_out != "null") p.gro_out += strs.str();
-    if(p.trr_out != "null") p.trr_out += strs.str();
-    if(p.chk_out != "null") p.chk_out += strs.str();
-    if(p.ene_out != "null") p.ene_out += strs.str();
-    if(p.cdv_out != "null") p.cdv_out += strs.str();
+      if(p.gro_out != "null") p.gro_out += strs.str();
+      if(p.trr_out != "null") p.trr_out += strs.str();
+      //if(p.chk_out != "null") p.chk_out += strs.str();
+      if(p.ene_out != "null") p.ene_out += strs.str();
+      if(p.cdv_out != "null") p.cdv_out += strs.str();
 
-    iomngr[i] = new IOManager(p);
-    md[i]     = new Molecules(p);
-    if(p.gro_in != "null" || p.chk_in != "null"){
-      iomngr[i]->ReadInputs(md[i]);
+      iomngr[i] = new IOManager(p);
+      md[i]     = new Molecules(p);
+      if(p.gro_in != "null" || p.chk_in != "null"){
+	iomngr[i]->ReadInputs(md[i]);
+      }
+      if(p.adjust_center==1)
+	md[i]->SetMassCenterToSystemCenter();
+
+      if(p.tconstant > 0){
+	md[i]->SetTemperature(remdinfo->GetTemperature(i));
+      }
+      if(p.pconstant > 0){
+	md[i]->SetPressure(remdinfo->GetPressure(i));
+      }
+
+      if(p.gen_vel == 1){
+	md[i]->RandomVel();
+	md[i]->VelocityScaling();
+	//md[i]->ZeroAngularVel();
+	md[i]->RandomAngularVel();
+	md[i]->AngVelocityScaling();
+      }
+
+      if(p.init_scaling == 1){
+	md[i]->VelocityScaling();
+	md[i]->AngVelocityScaling();
+      }
+
+      if(p.bstat_mass != 0.0){
+	md[i]->bst->W = p.bstat_mass;
+	md[i]->bst->flush();
+      }
+      if(p.tstat_mass != 0.0){
+	md[i]->tst->Q = p.tstat_mass;
+	md[i]->tst->flush();
+      }
+      md[i]->InitializeProperty();
+
+      //md[i]->Sort();
     }
-    if(p.adjust_center==1)
-      md[i]->SetMassCenterToSystemCenter();
 
-    if(p.tconstant > 0){
-      md[i]->SetTemperature(remdinfo->GetTemperature(i));
-    }
-    if(p.pconstant > 0){
-      md[i]->SetPressure(remdinfo->GetPressure(i));
-    }
-
-    if(p.gen_vel == 1){
-      md[i]->RandomVel();
+    /*
+      for(int i=0;i<nreplica;i++){
       md[i]->VelocityScaling();
-      //md[i]->ZeroAngularVel();
-      md[i]->RandomAngularVel();
       md[i]->AngVelocityScaling();
-    }
-
-    if(p.init_scaling == 1){
-      md[i]->VelocityScaling();
-      md[i]->AngVelocityScaling();
-    }
-
-    if(p.bstat_mass != 0.0){
-      md[i]->bst->W = p.bstat_mass;
-      md[i]->bst->flush();
-    }
-    if(p.tstat_mass != 0.0){
-      md[i]->tst->Q = p.tstat_mass;
-      md[i]->tst->flush();
-    }
-    md[i]->InitializeProperty();
-
-    //md[i]->Sort();
-  }
-
-  /*
-  for(int i=0;i<nreplica;i++){
-    md[i]->VelocityScaling();
-    md[i]->AngVelocityScaling();
-    md[i]->InitializeProperty();
-    md[i]->PrintProperties(std::cout);
-  }
-  //*/
+      md[i]->InitializeProperty();
+      md[i]->PrintProperties(std::cout);
+      }
+    //*/
 #ifdef ENABLE_GPU
-  ngpus = param.ngpus;
-  if(ngpus>0){
-    fprintf(stdout,"GPU is used. # of gpu is %d, offest is %d\n",param.ngpus,param.gpu_offset);
-    mdgpu = new REMDGPU(md,nreplica);
-  }
-#else
-  ngpus = 0;
-#endif
-  snap_interval   = param.snap_interval;
-  chk_interval    = param.chk_interval;
-  energy_interval = param.energy_interval;
-
-  step = 0;
-
-  pot = new D[nreplica];
-  for(int i=0;i<nreplica;++i){
-    pot[i] = md[i]->GetPotential();
-  }
-  vol = new D[nreplica];
-  for(int i=0;i<nreplica;++i){
-    vol[i] = md[i]->GetVolume();
-  }
-  press = new D[nreplica];
-  for(int i=0;i<nreplica;++i){
-    press[i] = md[i]->GetPressure(); // this should be GetPressureTmp
-  }
-  temp = new D[nreplica];
-  for(int i=0;i<nreplica;++i){
-    temp[i] = md[i]->GetTemperature(); // this should be GetTemperatureTmp
-  }
-  vir = new D[nreplica];
-  for(int i=0;i<nreplica;++i){
-    vir[i] = md[i]->GetVirial();
-  }
-  ave = new Average[nreplica];
-  for(int i=0;i<nreplica;++i){
-    ave[i].flush();
-  }
-  std::stringstream strs;
-  strs << remdinfo->GetOutputDir() << "/energy.dat";
-  os_ene = new std::ofstream(strs.str().c_str(),std::ios_base::out);
-  if(os_ene->fail()){
-    std::cout << "error: open " << strs.str() << "failed" << std::endl;
-    exit(EXIT_FAILURE);
-  }
-  binary = new std::fstream[nreplica];
-  for(int rep=0;rep<nreplica;rep++){
-    std::stringstream strs;
-    strs << remdinfo->GetOutputDir() << "/P" << remdinfo->GetPressure(rep) << 'T' << remdinfo->GetTemperature(rep) << ".log";
-    const std::string filename = strs.str();
-    std::cout << "opening " << filename << std::endl;
-    if(param.restart == 1){
-      binary[rep].open(filename,std::ios::in  | std::ios::binary);
-      if(binary[rep].fail()) {
-	std::cerr << "error: open " << filename << " failed" << std::endl;
-	exit(EXIT_FAILURE);
-      }
-      double tmp[3];
-      binary[rep].read((char*)tmp,sizeof(double)*3);
-      if(tmp[0] != remdinfo->GetTemperature(rep) || tmp[1] != remdinfo->GetPressure(rep)){
-	std::cerr << "error: open " << filename << " failed" << std::endl;
-	exit(EXIT_FAILURE);
-      }
-      binary[rep].close();
-
-      binary[rep].open(filename,std::ios::out | std::ios::binary | std::ios::app);
-      if(binary[rep].fail()){
-	std::cout << "error: open " << filename << "failed" << std::endl;
-	exit(EXIT_FAILURE);
-      }
-    }else{
-      binary[rep].open(filename,std::ios::out | std::ios::binary);
-      if(binary[rep].fail()){
-	std::cout << "error: open " << filename << "failed" << std::endl;
-	exit(EXIT_FAILURE);
-      }
-      const double conditions[3]
-	= {remdinfo->GetTemperature(rep),remdinfo->GetPressure(rep),1.0};
-      binary[rep].write((char*)conditions,3*sizeof(double));
-      const int nelem = Average::NUM_ELEM;
-      binary[rep].write((char*)&nelem,sizeof(int));
+    ngpus = param.ngpus;
+    if(ngpus>0){
+      fprintf(stdout,"GPU is used. # of gpu is %d, offest is %d\n",param.ngpus,param.gpu_offset);
+      mdgpu = new REMDGPU(md,nreplica);
     }
-  }
+#else
+    ngpus = 0;
+#endif
+    snap_interval   = param.snap_interval;
+    chk_interval    = param.chk_interval;
+    energy_interval = param.energy_interval;
+    step = 0;
 
+    const int rank = remdinfo->GetRank();
+    if(rank == 0){
+      const I nreplica_global = remdinfo->GetNumReplicaGlobal();
+      pot = new D[nreplica_global];
+      vol = new D[nreplica_global];
+      ave = new Average[nreplica_global];
+    }else{
+      pot = new D[nreplica];
+      vol = new D[nreplica];
+      ave = new Average[nreplica];
+    }
+    for(int i=0;i<nreplica;++i){
+      pot[i] = md[i]->GetPotential();
+    }
+    for(int i=0;i<nreplica;++i){
+      vol[i] = md[i]->GetVolume();
+    }
+    for(int i=0;i<nreplica;++i){
+      ave[i].flush();
+    }
+    GatherResult();
+    if(remdinfo->GetRank() == 0){
+      const int nreplica_global = remdinfo->GetNumReplicaGlobal();
+      std::stringstream strs;
+      strs << remdinfo->GetOutputDir() << "/energy.dat";
+      os_ene = new std::ofstream(strs.str().c_str(),std::ios_base::out);
+      if(os_ene->fail()){
+	std::cout << "error: open " << strs.str() << "failed" << std::endl;
+	exit(EXIT_FAILURE);
+      }
+      binary = new std::fstream[nreplica_global];
+      for(int rep=0;rep<nreplica_global;rep++){
+	std::stringstream strs;
+	strs << remdinfo->GetOutputDir() << "/P" << remdinfo->GetPressure(rep) << 'T' << remdinfo->GetTemperature(rep) << ".log";
+	const std::string filename = strs.str();
+	std::cout << "opening " << filename << std::endl;
+	if(param.restart == 1){
+	  binary[rep].open(filename,std::ios::in  | std::ios::binary);
+	  if(binary[rep].fail()) {
+	    std::cerr << "error: open " << filename << " failed" << std::endl;
+	    exit(EXIT_FAILURE);
+	  }
+	  double tmp[3];
+	  binary[rep].read((char*)tmp,sizeof(double)*3);
+	  if(tmp[0] != remdinfo->GetTemperature(rep) || tmp[1] != remdinfo->GetPressure(rep)){
+	    std::cerr << "error: open " << filename << " failed" << std::endl;
+	    exit(EXIT_FAILURE);
+	  }
+	  binary[rep].close();
 
+	  binary[rep].open(filename,std::ios::out | std::ios::binary | std::ios::app);
+	  if(binary[rep].fail()){
+	    std::cout << "error: open " << filename << "failed" << std::endl;
+	    exit(EXIT_FAILURE);
+	  }
+	}else{
+	  binary[rep].open(filename,std::ios::out | std::ios::binary);
+	  if(binary[rep].fail()){
+	    std::cout << "error: open " << filename << "failed" << std::endl;
+	    exit(EXIT_FAILURE);
+	  }
+	  const double conditions[3]
+	    = {remdinfo->GetTemperature(rep),remdinfo->GetPressure(rep),1.0};
+	  binary[rep].write((char*)conditions,3*sizeof(double));
+	  const int nelem = Average::NUM_ELEM;
+	  binary[rep].write((char*)&nelem,sizeof(int));
+	}
+      }
+    }
   } // if (ninterval > 0)
-  /*
-  std::cout << "p.restart is " << param.restart << std::endl;
-  if(param.restart==1) remdinfo->ReadHistogramFromBackUp();
-  //*/
-  wham = new WHAM(remdinfo);
-  //printf("structing obj wham constructed\n");
-  remdinfo->ShowAll();
-
 };
 
 REMD::~REMD(){
-  printf("====destruct class REMD====\n");
   const I nreplica = remdinfo->GetNumReplica();
   for(int rep=0;rep<nreplica;rep++){
     Profiler p = md[rep]->prof + md[rep]->fclcltr->prof;
@@ -231,6 +234,7 @@ REMD::~REMD(){
 
 void REMD::ExecuteMDs(){
   const I nreplica = remdinfo->GetNumReplica();
+  const I rank     = remdinfo->GetRank();
   if(ngpus>0){
 #ifdef ENABLE_GPU
     mdgpu->ExecuteSteps(remdinfo->temperature,remdinfo->pressure);
@@ -244,7 +248,7 @@ void REMD::ExecuteMDs(){
     exit(EXIT_FAILURE);
 #endif
   }else{
-#pragma omp parallel for num_threads(param.nthreads)
+    //#pragma omp parallel for num_threads(param.nthreads)
     for(int rep=0;rep<nreplica;++rep){
       if(param.tconstant == 2){
 	md[rep]->VelocityScaling();
@@ -253,9 +257,7 @@ void REMD::ExecuteMDs(){
       md[rep]->ExecuteSteps();//interval is included in md class
       pot[rep] = md[rep]->GetPotential();
       vol[rep] = md[rep]->GetVolume();
-      //vir[rep] = md[rep]->GetVirial();
-      //press[rep] = md[rep]->GetTmpPressure();
-      //temp[rep]  = md[rep]->GetTmpTemperature();
+      ave[rep] = md[rep]->GetAverage();
     }
   }
 }
@@ -268,10 +270,9 @@ void REMD::ExecuteREMD(){
 
   const I nreplica = remdinfo->GetNumReplica();
   //const I nprocs   = remdinfo->GetNumProc();
+  const I rank = remdinfo->GetRank();
   //const I num_bkup = remdinfo->GetNumBackup();
   //const I num_ene  = remdinfo->GetNumPointEnergy();
-  double pot_ave[nreplica];
-  for(int i=0;i<nreplica;++i) pot_ave[i] = 0.;
 
   if(param.adjustor == 1){
     std::cout << "adjusting conditon" << std::endl;
@@ -279,18 +280,18 @@ void REMD::ExecuteREMD(){
       for(int s=0;s<param.adjust_interval;s++){
 	if(s%100==0) std::cout << s << "th step" << std::endl;
 	ExecuteMDs();
-	IncrementHistogram();
+	//IncrementHistogram();
 	ReplicaExchange();
 	step++;
       }
     }while(remdinfo->ConditionAdjustor());
     step = 0;
   }
-
+  
   for(unsigned long s=0;s<step_max/interval;++s){
     ExecuteMDs();
-#if 0
-    if(s%1000) std::cerr << "=== " << s << " intervals done ===" << std::endl;
+#if 1
+    if(s%1000) std::cerr << "=== " << rank << " " << s << " intervals done ===" << std::endl;
 #else
     for(int rep=0;rep<nreplica;rep++){
       std::cout << " rep " << rep;
@@ -320,10 +321,19 @@ void REMD::ExecuteREMD(){
 	  std::cout << " " << a.sum[Average::BSTx];
 	  std::cout << " " << a.sum[Average::BSTy];
 	}
+#if 0
+	if(param.tconstant == 1){
+	  std::cout << " " << a.sum[Average::TST]
+	}
+	if(param.pconstant > 0){
+	  std::cout << " " << a.sum[Average::BST]
+	}
+#endif
 	std::cout << " " << a.sum[Average::DRF];
 	std::cout << " " << a.sum[Average::TOT];
 #else
-        fprintr(stderr,"error: gpu is not enabled!");
+        fprintf(stderr,"error: gpu is not enabled!");
+	exit(EXIT_FAILURE);
 #endif
       }else{
         md[rep]->CalcProperties();
@@ -352,25 +362,35 @@ void REMD::ExecuteREMD(){
 	  std::cout << " " << md[rep]->bst->Pv[0];
 	  std::cout << " " << md[rep]->bst->Pv[1];
         }
+#if 0
+	if(param.tconstant == 1){
+	  std::cout << " " << prop.tst;
+	}
+	if(param.pconstant > 0){
+	  std::cout << " " << prop.bst;
+	}
+#endif
         std::cout << " " << prop.ham;
         std::cout << " " << prop.tot;
 #if 0
-      std::cout << " " << prop.Tave / (double)prop.nave;
-      if(param.confined == 1){
-	std::cout << " " << prop.Pave[2] / (double)prop.nave;
-      }else if(param.confined == 2){
-	std::cout << " " << prop.Pave[0] / (double)prop.nave;
-	std::cout << " " << prop.Pave[1] / (double)prop.nave;
-      }
+	std::cout << " " << prop.Tave / (double)prop.nave;
+	if(param.confined == 1){
+	  std::cout << " " << prop.Pave[2] / (double)prop.nave;
+	}else if(param.confined == 2){
+	  std::cout << " " << prop.Pave[0] / (double)prop.nave;
+	  std::cout << " " << prop.Pave[1] / (double)prop.nave;
+	}
 #endif
       } // gpu or not
       std::cout << std::endl;
     }
 #endif
-    OutputDebugInfo();
-    IncrementHistogram();
-    OutputBinary();
-
+    GatherResult(); //for mpi
+    if(rank == 0){
+      //OutputDebugInfo();
+      //IncrementHistogram();
+      OutputBinary();
+    }
     if(param.rem_type==0){
       ReplicaExchange();
     }else if(param.rem_type==1){
@@ -400,37 +420,39 @@ void REMD::ExecuteREMD(){
 #endif
       for(int rep=0;rep<nreplica;++rep){
 	const int ind = remdinfo->GetIndex(rep);
-	iomngr[rep]->UpdateOutputs(md[ind]);
+	iomngr[rep]->UpdateOutputs(md[rep],ind);
       }
-      remdinfo->OutputHistogram();
+      //remdinfo->OutputHistogram();
     }
+#if 0
     if(step%energy_interval==0){
       remdinfo->OutputAcceptRate();
       remdinfo->OutputTunnelCount();
       OutputEnergy();
     }
-
+#endif
     step++;
-  }
-
+  } // loop of s
   if(step_max > 0){
 #ifdef ENABLE_GPU
     if(ngpus>0) mdgpu->ConvertVariablesToHost(md);
 #endif
     for(int rep=0;rep<nreplica;++rep){
       const int ind = remdinfo->GetIndex(rep);
-      iomngr[rep]->UpdateOutputs(md[ind]);
+      iomngr[rep]->UpdateOutputs(md[rep],ind);
 
       iomngr[rep]->WriteCDV(md[rep],step/snap_interval);
     }
-    //output result
-    remdinfo->OutputHistogram();
-    remdinfo->OutputAcceptRate();
-    remdinfo->OutputTunnelCount();
-    OutputEnergy();
-    OutputIndex();
+    if(rank  == 0){
+      //output result
+      //remdinfo->OutputHistogram();
+      remdinfo->OutputAcceptRate();
+      remdinfo->OutputTunnelCount();
+      OutputEnergy();
+      OutputIndex();
+    }
   } // if step_max > 0
-  ExecuteWHAM();
+  //ExecuteWHAM();
 }
 
 static const D kb = 1.0;
@@ -457,21 +479,43 @@ D REMD::CalcExchangeProb(I type,I ind){
 
 void REMD::ReplicaExchange(){
   const I nreplica    = remdinfo->GetNumReplica();
-  //const I nproc       = remdinfo->GetNumProc();
-  const I ec_type     = step%4;//set exchange pair list number(0 to 3 for 2D rem,0 or 1 for 1D)
-  const I list_length = remdinfo->GetListLength(ec_type);//set exhcange list length of ec_type
-  //exchange temperature and pressure
-  for(int i=0;i<list_length;++i){
-    const Pair pair = remdinfo->GetPair(ec_type,i);
-    if(CalcExchangeProb(ec_type,i)>random_number()){
-      remdinfo->ExchangeAccepted(ec_type,i);
-    }else{
-      remdinfo->ExchangeRejected(ec_type,i);
+
+  if(false) if(remdinfo->GetRank() == 0){
+    printf("(debug:result)");
+    for(int i=0;i<remdinfo->GetNumReplicaGlobal();i++){
+      printf(" (%d,%lf,%lf)",remdinfo->GetIndex(i),pot[i],vol[i]);
     }
+    printf("\n");
   }
-  remdinfo->CheckTunneling();
-//set temperature of all replica from remdinfo
-//remdinfo has conditions of i th replica in order
+
+  //exchange temperature and pressure
+  if(remdinfo->GetRank() == 0){
+    remdinfo->SetAllIsExchangedGlobal(false);
+    const I ec_type     = step%4;//set exchange pair list number(0 to 3 for 2D rem,0 or 1 for 1D)
+    const I list_length = remdinfo->GetListLength(ec_type);//set exhcange list length of ec_type
+    for(int i=0;i<list_length;++i){
+      const Pair pair = remdinfo->GetPair(ec_type,i);
+      if(CalcExchangeProb(ec_type,i)>random_number()){
+	remdinfo->ExchangeAccepted(ec_type,i);
+      }else{
+	remdinfo->ExchangeRejected(ec_type,i);
+      }
+    }
+    remdinfo->CheckTunneling();
+  }
+  remdinfo->BroadcastConditionAndIndex();
+  MPI_Barrier(MPI_COMM_WORLD);
+
+  if(false) if(remdinfo->GetRank() == 0){
+    printf("(debug:condition)");
+    for(int i=0;i<remdinfo->GetNumReplicaGlobal();i++){
+      printf(" (%d,%lf,%lf,%d)",remdinfo->GetIndex(i),remdinfo->GetTemperature(i),remdinfo->GetPressure(i),remdinfo->GetIsExchanged(i));
+    }
+    printf("\n");
+  }
+
+  //set temperature of all replica from remdinfo
+  //remdinfo has conditions of i th replica in order
   if(remdinfo->GetNumGPU()<=0){
     for(int i=0;i<nreplica;++i){
       if(remdinfo->GetIsExchanged(i)){
@@ -487,6 +531,10 @@ void REMD::ReplicaExchange(){
 };
 
 void REMD::DesignedWalkReplicaExchange(){
+#ifdef ENABLE_MPI
+  fprintf(stderr,"DWREM is not supported with MPI\n");
+  Abort();
+#endif
   const I nreplica    = remdinfo->GetNumReplica();
   const I ec_type     = remdinfo->GetListType();
   const I list_length = remdinfo->GetListLength(ec_type);//set exhcange list length of ec_type
@@ -753,15 +801,8 @@ void REMD::IncrementHistogram(){
     const D p = pot[ind]/(D)remdinfo->GetNmol();
     const D v = vol[ind]/(D)remdinfo->GetNmol();
     remdinfo->IncrementHistogram(v,p,i);
-#if 0
-    const D P = press[ind];
-    const D T = temp[ind];
-    remdinfo->KeepPressure(v,p,i,P);
-    remdinfo->KeepTemperature(v,p,i,T);
-#else
     const Average a = ave[ind];
     remdinfo->KeepAverages(v,p,i,a);
-#endif
   }
 };
 
@@ -831,10 +872,8 @@ void REMD::OutputIndex(){
 };
 
 void REMD::ExecuteWHAM(){
-  //printf("====ExecuteWHAM====\n");
   const I iter = 1000;
   for(int i=0;i<iter;++i){
-    //printf("====%dth iterating now====\n",i);
     wham->CalcDensState(remdinfo);
     wham->CalcG(remdinfo);
   }
@@ -843,37 +882,44 @@ void REMD::ExecuteWHAM(){
 };
 
 void REMD::OutputBinary(){
-  for(int rep=0;rep<remdinfo->GetNumReplica();rep++){
-    if(ngpus > 0){
+  if(remdinfo->GetRank() == 0){
+    for(int rep=0;rep<remdinfo->GetNumReplicaGlobal();rep++){
+#if 0
+      if(ngpus > 0){
 #ifdef ENABLE_GPU
-      const Average a = mdgpu->GetAverages(remdinfo->GetIndex(rep));
-      binary[rep].write((char*)&a.sum,Average::NUM_ELEM*sizeof(double));
+	const Average a = mdgpu->GetAverages(remdinfo->GetIndex(rep));
+	binary[rep].write((char*)&a.sum,Average::NUM_ELEM*sizeof(double));
 #else
-      fprintf(stderr,"%s : %s : error: gpu is not enabled!",__FILE__,__LINE__);
-      exit(EXIT_FAILURE);
+	fprintf(stderr,"%s : %s : error: gpu is not enabled!",__FILE__,__LINE__);
+	exit(EXIT_FAILURE);
 #endif
-    }else{
-      const Molecules* m = md[remdinfo->GetIndex(rep)];
-      const Property prop = m->GetProperty();
-      Average a;
-      a.sum[Average::LJ]   = prop.lj;
-      a.sum[Average::CLMB] = prop.clmb;
-      a.sum[Average::WALL] = prop.wall;
-      a.sum[Average::TRA]  = prop.tra;
-      a.sum[Average::ROT]  = prop.rot;
-      a.sum[Average::T]    = prop.T;
-      a.sum[Average::P]    = prop.prs[3];
-      a.sum[Average::Px]   = prop.prs[0];
-      a.sum[Average::Py]   = prop.prs[1];
-      a.sum[Average::Pz]   = prop.prs[2];
-      a.sum[Average::TOT]  = prop.tot;
-      a.sum[Average::DRF]  = prop.ham;
-      a.sum[Average::TSTs] = m->tst->s;
-      a.sum[Average::TSTv] = m->tst->Ps;;
-      a.sum[Average::BSTx] = m->bst->Pv[0];
-      a.sum[Average::BSTy] = m->bst->Pv[1];
-      a.sum[Average::BSTz] = m->bst->Pv[2];
+      }else{
+	const Molecules* m = md[remdinfo->GetIndex(rep)];
+	const Property prop = m->GetProperty();
+	Average a;
+	a.sum[Average::LJ]   = prop.lj;
+	a.sum[Average::CLMB] = prop.clmb;
+	a.sum[Average::WALL] = prop.wall;
+	a.sum[Average::TRA]  = prop.tra;
+	a.sum[Average::ROT]  = prop.rot;
+	a.sum[Average::T]    = prop.T;
+	a.sum[Average::P]    = prop.prs[3];
+	a.sum[Average::Px]   = prop.prs[0];
+	a.sum[Average::Py]   = prop.prs[1];
+	a.sum[Average::Pz]   = prop.prs[2];
+	a.sum[Average::TOT]  = prop.tot;
+	a.sum[Average::DRF]  = prop.ham;
+	a.sum[Average::TSTs] = m->tst->s;
+	a.sum[Average::TSTv] = m->tst->Ps;;
+	a.sum[Average::BSTx] = m->bst->Pv[0];
+	a.sum[Average::BSTy] = m->bst->Pv[1];
+	a.sum[Average::BSTz] = m->bst->Pv[2];
+	binary[rep].write((char*)&a.sum,Average::NUM_ELEM*sizeof(double));
+      }
+#else
+      Average a = ave[remdinfo->GetIndex(rep)];
       binary[rep].write((char*)&a.sum,Average::NUM_ELEM*sizeof(double));
+#endif
     }
   }
 }
@@ -915,3 +961,26 @@ void REMD::OutputDebugInfo(){
   fclose(fp_vol);
   //fclose(fp_pre);
 };
+
+void REMD::GatherResult(){
+  const int rank     = remdinfo->GetRank();
+  const int nproc    = remdinfo->GetNumProc();
+  const int nreplica = remdinfo->GetNumReplica();
+#ifdef ENABLE_MPI
+  if(rank == 0){
+    // gather pot, vol, and ae
+    MPI_Request req[nproc];
+    MPI_Status  stat[nproc];
+    for(int i=1; i<nproc;i++) MPI_Irecv(pot+i*nreplica,nreplica,MPI_DOUBLE,i,i,MPI_COMM_WORLD,&req[i-1]);
+    MPI_Waitall(nproc-1,req,stat);
+    for(int i=1; i<nproc;i++) MPI_Irecv(vol+i*nreplica,nreplica,MPI_DOUBLE,i,i,MPI_COMM_WORLD,&req[i-1]);
+    MPI_Waitall(nproc-1,req,stat);
+    for(int i=1; i<nproc;i++) MPI_Irecv((double*)(ave+i*nreplica),nreplica*sizeof(Average)/sizeof(double),MPI_DOUBLE,i,i,MPI_COMM_WORLD,&req[i-1]);
+    MPI_Waitall(nproc-1,req,stat);
+  }else{
+    MPI_Send(pot,nreplica,MPI_DOUBLE,0,rank,MPI_COMM_WORLD);
+    MPI_Send(vol,nreplica,MPI_DOUBLE,0,rank,MPI_COMM_WORLD);
+    MPI_Send((double*)ave,nreplica*sizeof(Average)/sizeof(double),MPI_DOUBLE,0,rank,MPI_COMM_WORLD);
+  }
+#endif
+}
