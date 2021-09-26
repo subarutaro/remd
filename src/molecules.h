@@ -14,6 +14,7 @@
 #include <vector>
 #include <string>
 
+#include "remdinfo.h"
 #include "vector.h"
 #include "unit.h"
 #include "rotation.h"
@@ -41,6 +42,7 @@ class Molecules{
   MolTypeList mlist;
   dvec3       L;
   Property    prop;
+  Average     ave;
   Parameter   param;
   ForceCalculator *fclcltr;
 
@@ -95,6 +97,7 @@ class Molecules{
     CalcProperties();
     prop.H0  = prop.tot;
     prop.ham = prop.tot - prop.H0;
+    std::cout << prop << std::endl;
   };
 
   void MakeMolTypeList();
@@ -173,9 +176,9 @@ class Molecules{
     //bst->Pv = 0.0;
   };
 
-  double GetPotential(){return prop.pot;};
-  double GetKinetic(){return prop.kin;};
-  double GetVolume(){
+  double GetPotential() const {return prop.pot;};
+  double GetKinetic() const {return prop.kin;};
+  double GetVolume() const {
     if(param.confined == 1){
       return GetBottomArea() * L[2];
     }else if (param.confined == 2){
@@ -185,19 +188,42 @@ class Molecules{
       return L[0]*L[1]*L[2];
     }
   };
-  double GetBottomArea(){
+  double GetBottomArea() const {
     if(param.confined == 1){
       const double sigma_c = 3.4; // angstrom
-      const double wl = (param.wall_length * 1e-10 / unit_length - 0.5*sigma_c);
+      const double wl = (param.wall_length - 0.5*sigma_c) * 1e-10 / unit_length;
       return M_PI * wl * wl;
     }else{
       fprintf(stderr,"error: do not use GetBottomArea for not-1D confined system");
       exit(EXIT_FAILURE);
     }
   };
-  double GetVirial(){return sum(prop.vir);}
-  double GetHamiltonian(){return prop.tot;};
-  Property GetProperty(){return prop;}
+  double GetVirial()      const {return sum(prop.vir);}
+  double GetHamiltonian() const {return prop.tot;};
+  Property GetProperty()  const {return prop;}
+  Average  GetAverage()   const {
+    Average ave;
+    ave.sum[Average::LJ]   = prop.lj;
+    ave.sum[Average::CLMB] = prop.clmb;
+    ave.sum[Average::WALL] = prop.wall;
+    ave.sum[Average::VOL]  = GetVolume();//prop.vol;
+    ave.sum[Average::TRA]  = prop.tra;
+    ave.sum[Average::ROT]  = prop.rot;
+    ave.sum[Average::T]    = prop.T;
+    ave.sum[Average::P]    = prop.prs[3];
+    ave.sum[Average::Px]   = prop.prs[0];
+    ave.sum[Average::Py]   = prop.prs[1];
+    ave.sum[Average::Pz]   = prop.prs[2];
+    ave.sum[Average::TOT]  = prop.tot;
+    ave.sum[Average::DRF]  = prop.ham;
+    ave.sum[Average::TSTs] = tst->s;
+    ave.sum[Average::TSTv] = tst->Ps;
+    ave.sum[Average::BSTx] = bst->Pv[0];
+    ave.sum[Average::BSTy] = bst->Pv[1];
+    ave.sum[Average::BSTz] = bst->Pv[2];
+
+    return ave;
+  }
 
   void PrintAll(std::ostream&);
 };
