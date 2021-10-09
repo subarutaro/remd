@@ -5,10 +5,10 @@ Please refer to https://doi.org/10.1073/pnas.1701609114 for use case.
 If you use this package, please cite out paper above.
 
 ## requirement
-g++ 5.0 or later
+- g++ 5.0 or later
 (optional)
-Intel oneAPI 2021.3 or later
-NVIDIA CUDA 8.0 or later
+- Intel oneAPI 2021.3 or later
+- NVIDIA CUDA 8.0 or later
 
 ## input parameter
 - input_prefix
