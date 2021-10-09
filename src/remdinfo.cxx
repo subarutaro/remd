@@ -6,11 +6,11 @@
 #include <mpi.h>
 #endif
 //===================== class Histogram ========================
-Histogram::Histogram(I _vnum,I _pnum){
+Histogram::Histogram(int _vnum,int _pnum){
   vnum = _vnum;
   pnum = _pnum;
-  histogram = new I*[vnum];
-  for(int i=0;i<vnum;++i) histogram[i] = new I[pnum];
+  histogram = new int*[vnum];
+  for(int i=0;i<vnum;++i) histogram[i] = new int[pnum];
   for(int i=0;i<vnum;++i){
     for(int j=0;j<pnum;++j){
       histogram[i][j] = 0;
@@ -35,7 +35,7 @@ Histogram::~Histogram(){
   delete[] ave;
 };
 
-void Histogram::Increment(I v,I p){
+void Histogram::Increment(int v,int p){
   if(sum==0){
     vmax = vmin = v;
     pmax = pmin = p;
@@ -51,7 +51,7 @@ void Histogram::Increment(I v,I p){
 };
 
 //===================== class ExchangeList =======================
-ExchangeList::ExchangeList(I in_dim_temp,I in_dim_press){
+ExchangeList::ExchangeList(int in_dim_temp,int in_dim_press){
   printf("====construct ExchangeList====\n");
   dim_temp  = in_dim_temp;
   dim_press = in_dim_press;
@@ -62,7 +62,7 @@ ExchangeList::ExchangeList(I in_dim_temp,I in_dim_press){
   for(int i=0;i<4;++i) rate[i] = new AcceptRate[dim_temp*dim_press/2];
 
   //setting pairlist 0
-  I count0 = 0;
+  int count0 = 0;
   for(int j=0;j<dim_press;++j){
     for(int i=0;i<dim_temp/2;++i){
       list[0][count0].a = 2*i   + j*dim_temp;
@@ -73,7 +73,7 @@ ExchangeList::ExchangeList(I in_dim_temp,I in_dim_press){
   }
   length[0] = count0;
   //setting pairlist 1
-  I count1 = 0;
+  int count1 = 0;
   for(int j=0;j<dim_press/2;++j){
     for(int i=0;i<dim_temp;++i){
       list[1][count1].a = i + 2*j*dim_temp;
@@ -84,7 +84,7 @@ ExchangeList::ExchangeList(I in_dim_temp,I in_dim_press){
   }
   length[1] = count1;
   //setting pairlist 2
-  I count2 = 0;
+  int count2 = 0;
   for(int j=0;j<dim_press;++j){
     for(int i=0;i<dim_temp/2-(dim_temp+1)%2;++i){
       list[2][count2].a = 2*i   + j*dim_temp +1;
@@ -95,7 +95,7 @@ ExchangeList::ExchangeList(I in_dim_temp,I in_dim_press){
   }
   length[2] = count2;
   //setting pairlist 3
-  I count3 = 0;
+  int count3 = 0;
   for(int j=0;j<dim_press/2-(dim_press+1)%2;++j){
     for(int i=0;i<dim_temp;++i){
       list[3][count3].a = i + (2*j+1)*dim_temp;
@@ -191,8 +191,9 @@ REMDInfo::REMDInfo(const Parameter _p){
 
   ec_type = 0;
   if(dim_temp==1) ec_type = 1;
-
+#ifdef ENABLE_MPI
   MPI_Barrier(MPI_COMM_WORLD);
+#endif
   if(rank == 0){
     int cond_mode = _p.cond_mode;
     histogram = new Histogram*[nreplica_global];
@@ -204,7 +205,7 @@ REMDInfo::REMDInfo(const Parameter _p){
 
     pairlist = new ExchangeList(dim_temp,dim_press);
 
-    index       = new I[nreplica_global];
+    index       = new int[nreplica_global];
     temperature = new D[nreplica_global];
     pressure    = new D[nreplica_global];
     isExchanged = new bool[nreplica_global];
@@ -238,7 +239,7 @@ REMDInfo::REMDInfo(const Parameter _p){
     }
   }else{
     printf("%d: receive index, temperature and pressure\n",rank);
-    index       = new I[nreplica];
+    index       = new int[nreplica];
     temperature = new D[nreplica];
     pressure    = new D[nreplica];
     isExchanged = new bool[nreplica];
@@ -251,6 +252,7 @@ REMDInfo::REMDInfo(const Parameter _p){
       printf("%d %d %lf %lf\n",i,index[i],temperature[i],pressure[i]);
     }
   }
+#ifdef ENABLE_MPI
   for(int i=0;i<nproc;i++){
     MPI_Barrier(MPI_COMM_WORLD);
     if(rank == i){
@@ -260,11 +262,12 @@ REMDInfo::REMDInfo(const Parameter _p){
       }
     }
   }
+#endif
 }
 
 void REMDInfo::BroadcastConditionAndIndex(){
-  MPI_Barrier(MPI_COMM_WORLD);
 #ifdef ENABLE_MPI
+  MPI_Barrier(MPI_COMM_WORLD);
   if(rank == 0){
     // broadcast index, temperature, pressure
     //printf("0: broadcast index, temperature and pressure\n");
@@ -342,12 +345,12 @@ void REMDInfo::ShowAll(){
   }
 };
 
-void REMDInfo::SetConditionGeometrical(I dim_temp,I dim_press){
+void REMDInfo::SetConditionGeometrical(int dim_temp,int dim_press){
   D t = (dim_temp==1)  ? 1.0 : powf(temperature_max/temperature_min,1./(D)(dim_temp-1));
   D p = (dim_press==1) ? 0.0 : ((pressure_max - pressure_min)/(D)(dim_press-1));
   for(int j=0;j<dim_press;++j){
     for(int i=0;i<dim_temp;++i){
-      I ind = i+j*dim_temp;
+      int ind = i+j*dim_temp;
       temperature[ind] = temperature_min*powf(t,i);
       pressure[ind] = pressure_min + p * j;
       //printf(" md[%d]: T= %lf,P= %lf\n",ind,temperature[i+j*dim_temp],pressure[i+j*dim_temp]);
@@ -355,12 +358,12 @@ void REMDInfo::SetConditionGeometrical(I dim_temp,I dim_press){
   }
 };
 
-void REMDInfo::SetConditionArithmetic(I dim_temp,I dim_press){
+void REMDInfo::SetConditionArithmetic(int dim_temp,int dim_press){
   D t = (dim_temp==1)? 0.0 : ((temperature_max - temperature_min)/(D)(dim_temp-1));
   D p = (dim_press==1)?0.0 : ((pressure_max - pressure_min)/(D)(dim_press-1));
   for(int j=0;j<dim_press;++j){
     for(int i=0;i<dim_temp;++i){
-      I ind = i+j*dim_temp;
+      int ind = i+j*dim_temp;
       temperature[ind] = temperature_min + t*i;
       pressure[ind] = pressure_min + p*j;
       printf(" md[%d]: T= %lf,P= %lf\n",ind,temperature[i+j*dim_temp],pressure[i+j*dim_temp]);
@@ -368,7 +371,7 @@ void REMDInfo::SetConditionArithmetic(I dim_temp,I dim_press){
   }
 };
 
-void REMDInfo::SetConditionFromFile(const char* filename,I dim_temp,I dim_press){
+void REMDInfo::SetConditionFromFile(const char* filename,int dim_temp,int dim_press){
   std::ifstream ifs(filename);
   if(ifs.fail()){
     std::cerr << "error: open " << filename << " failed" << std::endl;
@@ -447,7 +450,7 @@ void ReadHeatCapacityFromFile(const std::string filename, double *p,double *t,do
   //*/
 }
 
-void REMDInfo::SetConditionFromHeatCapacity(std::string filename,I dim_temp,I dim_press,const bool type){
+void REMDInfo::SetConditionFromHeatCapacity(std::string filename,int dim_temp,int dim_press,const bool type){
   std::cout << "generaging temperature condition from " << filename << std::endl;
   const int npmax = 10000, ntmax = 10000;
   double *p,*t,**hc;
@@ -540,7 +543,7 @@ void REMDInfo::SetConditionFromHeatCapacity(std::string filename,I dim_temp,I di
   free(hc);
 }
 
-void REMDInfo::SetConditionFromHeatCapacity2(std::string filename,I dim_temp,I dim_press){
+void REMDInfo::SetConditionFromHeatCapacity2(std::string filename,int dim_temp,int dim_press){
   std::cout << "generaging temperature condition from " << filename << std::endl;
   const double ar = log(0.6);
 
@@ -613,8 +616,8 @@ bool REMDInfo::ConditionAdjustor(){
   for(int type=0;type<4;++type){
     for(int i=0;i<pairlist->GetLength(type);++i){
       const Pair pair = GetPair(type,i);
-      const I ind1 = GetIndex(pair.a);
-      const I ind2 = GetIndex(pair.b);
+      const int ind1 = GetIndex(pair.a);
+      const int ind2 = GetIndex(pair.b);
       rate[count] = pairlist->GetRate(type,i);
       ave += rate[count];
       dT[count] = temperature[ind2] - temperature[ind1];
@@ -659,8 +662,8 @@ bool REMDInfo::ConditionAdjustor(){
     for(int type=0;type<4;++type){
       if(i < pairlist->GetLength(type)){
 	const Pair pair = GetPair(type,i);
-	const I ind1 = GetIndex(pair.a);
-	const I ind2 = GetIndex(pair.b);
+	const int ind1 = GetIndex(pair.a);
+	const int ind2 = GetIndex(pair.b);
 	temperature[ind2] = temperature[ind1] + dT[count++];
       }
     }
@@ -767,8 +770,8 @@ void REMDInfo::OutputAcceptRate(){
   for(int type=0;type<4;++type){
     for(int i=0;i<pairlist->GetLength(type);++i){
       const Pair pair = GetPair(type,i);
-      const I ind1 = GetIndex(pair.a);
-      const I ind2 = GetIndex(pair.b);
+      const int ind1 = GetIndex(pair.a);
+      const int ind2 = GetIndex(pair.b);
       fprintf(fp,"%lf %lf %lf %lf %lf\n",temperature[ind1],pressure[ind1],temperature[ind2],pressure[ind2],pairlist->GetRate(type,i));
     }
   }
@@ -783,8 +786,8 @@ void REMDInfo::OutputAcceptRate(){
     const int i2 = p * ll2 / dim_press;
     for(int i = 0;i<ll0/dim_press;i++){
       Pair pair = GetPair(0,i+i0);
-      I ind0 = GetIndex(pair.a);
-      I ind1 = GetIndex(pair.b);
+      int ind0 = GetIndex(pair.a);
+      int ind1 = GetIndex(pair.b);
       fprintf(fp,"%lf %lf %lf %lf %lf\n",temperature[ind0],pressure[ind0],temperature[ind1],pressure[ind1],pairlist->GetRate(0,i+i0));
       if(i >= ll2/dim_press) break;
       pair = GetPair(2,i+i2);
@@ -800,8 +803,8 @@ void REMDInfo::OutputAcceptRate(){
    const int i3 = t * ll3 / dim_temp;
    for(int i = 0;i<ll1/dim_temp;i++){
      Pair pair = GetPair(1,i+i1);
-     I ind0 = GetIndex(pair.a);
-     I ind1 = GetIndex(pair.b);
+     int ind0 = GetIndex(pair.a);
+     int ind1 = GetIndex(pair.b);
      fprintf(fp,"%lf %lf %lf %lf %lf\n",temperature[ind0],pressure[ind0],temperature[ind1],pressure[ind1],pairlist->GetRate(1,i+i1));
      if(i >= ll3/dim_temp) break;
      pair = GetPair(3,i+i3);
@@ -828,12 +831,12 @@ void REMDInfo::OutputTunnelCount(){
   fclose(fp);
 }
 
-Average REMDInfo::GetAverages(I v,I p){
-  I sum_hist=0;
+Average REMDInfo::GetAverages(int v,int p){
+  int sum_hist=0;
   Average sum_ave;
   sum_ave.flush();
   for(int rep=0;rep<nreplica;++rep){
-    const I hist = histogram[rep]->GetHist(v,p);
+    const int hist = histogram[rep]->GetHist(v,p);
     Average tmp = histogram[rep]->GetAverages(v,p);
     if(hist != 0){
       sum_hist += hist;

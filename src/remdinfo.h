@@ -92,34 +92,34 @@ class Average{
 
 class Histogram{
  private:
-  I vmax, vmin;
-  I pmax, pmin;
-  I vnum,pnum;
-  I sum;
+  int vmax, vmin;
+  int pmax, pmin;
+  int vnum,pnum;
+  int sum;
 
-  I **histogram;
+  int **histogram;
   Average **ave;
 
  public:
-  Histogram(I vnum,I pnum);
+  Histogram(int vnum,int pnum);
   ~Histogram();
-  void Increment(I v, I p);
+  void Increment(int v, int p);
   //void Output(char *filename);
 
-  I GetSum(){return sum;};
-  I GetHist(I v,I p){return histogram[v][p];};
+  int GetSum(){return sum;};
+  int GetHist(int v,int p){return histogram[v][p];};
 
-  void KeepAverages(I v,I p,Average _ave){ave[v][p] += _ave;};
-  Average GetAverages(I v,I p){
+  void KeepAverages(int v,int p,Average _ave){ave[v][p] += _ave;};
+  Average GetAverages(int v,int p){
     if(histogram[v][p]>0) return ave[v][p]/(D)histogram[v][p];
     Average tmp;tmp.flush();
     return tmp;
   };
 
-  I GetVolMin(){return vmin;};
-  I GetVolMax(){return vmax;};
-  I GetPotMin(){return pmin;};
-  I GetPotMax(){return pmax;};
+  int GetVolMin(){return vmin;};
+  int GetVolMax(){return vmax;};
+  int GetPotMin(){return pmin;};
+  int GetPotMax(){return pmax;};
   void SetVolMin(int _vmin){vmin = _vmin;};
   void SetVolMax(int _vmax){vmax = _vmax;};
   void SetPotMin(int _pmin){pmin = _pmin;};
@@ -140,8 +140,8 @@ class Histogram{
 
 class AcceptRate{
  private:
-  I sum_accept;
-  I sum_reject;
+  int sum_accept;
+  int sum_reject;
  public:
   AcceptRate(){
     sum_accept=0;sum_reject=0;
@@ -154,31 +154,31 @@ class AcceptRate{
 };
 
 typedef struct{
-  I a;
-  I b;
+  int a;
+  int b;
 }Pair;
 
 class ExchangeList{
  private:
   Pair **list;
   AcceptRate **rate;
-  I    dim_temp;
-  I    dim_press;
-  I    length[4];
+  int    dim_temp;
+  int    dim_press;
+  int    length[4];
  public:
-  ExchangeList(I in_dim_temp,I in_dim_press);
+  ExchangeList(int in_dim_temp,int in_dim_press);
   ~ExchangeList();
-  I GetLength(I type){
+  int GetLength(int type){
     if(type>3){
       fprintf(stderr,"error: index of GetLength(=%d) must be less than 4\n",type);
       exit(0);
     }
     return length[type];
   };
-  Pair GetPair(I type,I ind){return list[type][ind];};
-  void Accept(I type,I ind){rate[type][ind].Accept();};
-  void Reject(I type,I ind){rate[type][ind].Reject();};
-  D GetRate(I type,I ind){return rate[type][ind].GetRate();};
+  Pair GetPair(int type,int ind){return list[type][ind];};
+  void Accept(int type,int ind){rate[type][ind].Accept();};
+  void Reject(int type,int ind){rate[type][ind].Reject();};
+  D GetRate(int type,int ind){return rate[type][ind].GetRate();};
   void FlushRate(){
     for(int type=0;type<4;++type){
       for(int ind=0;ind<length[type];ind++){
@@ -222,9 +222,9 @@ class REMDInfo{
   unsigned long step_max;
   unsigned long interval;
 
-  I nmol;
-  I nreplica;
-  I nreplica_global; // for MPI
+  int nmol;
+  int nreplica;
+  int nreplica_global; // for MPI
 
   D temperature_max;
   D temperature_min;
@@ -240,41 +240,41 @@ class REMDInfo{
   D volume_max;
   D volume_min;
 
-  I ensemble;
+  int ensemble;
 
-  I nproc;
-  I rank;
-  I ngpu;
+  int nproc;
+  int rank;
+  int ngpu;
 
-  I mode;
+  int mode;
 
   //char header[256];
   char input_dir[256];
   char output_dir[256];
   int  restart;
 
-  I nenergy;
-  I nbkup;
+  int nenergy;
+  int nbkup;
 
-  I bkup_ninterval;
-  I output_ninterval;
+  int bkup_ninterval;
+  int output_ninterval;
 
   bool *isExchanged;
   Histogram   **histogram;
 
-  I dim_temp,dim_press;
-  I ec_type;
+  int dim_temp,dim_press;
+  int ec_type;
   ExchangeList *pairlist;
   TunnelCount **tc;
 
-  void SetConditionGeometrical(I dim_temp,I dim_press);
-  void SetConditionArithmetic(I dim_temp,I dim_press);
-  void SetConditionFromFile(const char*,I,I);
-  void SetConditionFromHeatCapacity(std::string,I,I,const bool);
-  void SetConditionFromHeatCapacity2(std::string,I,I);
+  void SetConditionGeometrical(int dim_temp,int dim_press);
+  void SetConditionArithmetic(int dim_temp,int dim_press);
+  void SetConditionFromFile(const char*,int,int);
+  void SetConditionFromHeatCapacity(std::string,int,int,const bool);
+  void SetConditionFromHeatCapacity2(std::string,int,int);
 
   void ExchangeIndex(Pair pair){
-    I tmp=index[pair.a];
+    int tmp=index[pair.a];
     index[pair.a]=index[pair.b];
     index[pair.b]=tmp;
   };
@@ -290,13 +290,13 @@ class REMDInfo{
   };
 
  public:
-  I *index;
+  int *index;
   D *temperature;
   D *pressure;
 
   REMDInfo(const Parameter param);
   ~REMDInfo();
-  void IncrementHistogram(D vol,D pot,I ind){
+  void IncrementHistogram(D vol,D pot,int ind){
     if(vol <  volume_min ||
        vol >= volume_max ||
        pot <  energy_min ||
@@ -311,38 +311,38 @@ class REMDInfo{
     }
 
 #ifdef LOG_SAMPLING
-    int v = (I)(log(vol - volume_min) / delta_volume);
-    int p = (I)(log(pot - energy_min) / delta_energy);
+    int v = (int)(log(vol - volume_min) / delta_volume);
+    int p = (int)(log(pot - energy_min) / delta_energy);
 #else
-    const int v = (I)((vol - volume_min) / delta_volume);
-    const int p = (I)((pot - energy_min) / delta_energy);
+    const int v = (int)((vol - volume_min) / delta_volume);
+    const int p = (int)((pot - energy_min) / delta_energy);
 #endif
     histogram[ind]->Increment(v,p);
   };
-  void KeepAverages(D vol,D pot,I ind, Average a){
+  void KeepAverages(D vol,D pot,int ind, Average a){
 #ifdef LOG_SAMPLING
-    const int v = (I)(log(vol - volume_min) / delta_volume);
-    const int p = (I)(log(pot - energy_min) / delta_energy);
+    const int v = (int)(log(vol - volume_min) / delta_volume);
+    const int p = (int)(log(pot - energy_min) / delta_energy);
 #else
-    const int v = (I)((vol - volume_min) / delta_volume);
-    const int p = (I)((pot - energy_min) / delta_energy);
+    const int v = (int)((vol - volume_min) / delta_volume);
+    const int p = (int)((pot - energy_min) / delta_energy);
 #endif
     histogram[ind]->KeepAverages(v,p,a);
   }
 
 #ifdef LOG_SAMPLING
-  D GetAbsoluteVolume(I idx){return exp(delta_volume*((D)idx + 0.5)) + volume_min;};
-  D GetRelativeVolume(I idx){return exp(delta_volume*((D)idx + 0.5));};
-  D GetAbsoluteEnergy(I idx){return exp(delta_energy*((D)idx + 0.5)) + energy_min;};
-  D GetRelativeEnergy(I idx){return exp(delta_energy*((D)idx + 0.5));};
+  D GetAbsoluteVolume(int idx){return exp(delta_volume*((D)idx + 0.5)) + volume_min;};
+  D GetRelativeVolume(int idx){return exp(delta_volume*((D)idx + 0.5));};
+  D GetAbsoluteEnergy(int idx){return exp(delta_energy*((D)idx + 0.5)) + energy_min;};
+  D GetRelativeEnergy(int idx){return exp(delta_energy*((D)idx + 0.5));};
 #else
-  D GetAbsoluteVolume(I idx){return delta_volume*((D)idx + 0.5) + volume_min;};
-  D GetRelativeVolume(I idx){return delta_volume*((D)idx + 0.5);};
-  D GetAbsoluteEnergy(I idx){return delta_energy*((D)idx + 0.5) + energy_min;};
-  D GetRelativeEnergy(I idx){return delta_energy*((D)idx + 0.5);};
+  D GetAbsoluteVolume(int idx){return delta_volume*((D)idx + 0.5) + volume_min;};
+  D GetRelativeVolume(int idx){return delta_volume*((D)idx + 0.5);};
+  D GetAbsoluteEnergy(int idx){return delta_energy*((D)idx + 0.5) + energy_min;};
+  D GetRelativeEnergy(int idx){return delta_energy*((D)idx + 0.5);};
 #endif
 
-  void ExchangeAccepted(I type,I ind){
+  void ExchangeAccepted(int type,int ind){
     Pair pair = GetPair(type,ind);
     isExchanged[index[pair.a]] = true;
     isExchanged[index[pair.b]] = true;
@@ -351,7 +351,7 @@ class REMDInfo{
     ExchangeIndex(pair);
     pairlist->Accept(type,ind);
   };
-  void ExchangeRejected(I type,I ind){
+  void ExchangeRejected(int type,int ind){
     Pair pair = GetPair(type,ind);
     isExchanged[index[pair.a]] = false;
     isExchanged[index[pair.b]] = false;
@@ -369,7 +369,7 @@ class REMDInfo{
     printf(" to %d\n",ec_type);
   };  
 
-  void Permutate(I ind[],I ilist[],D t[],I n,I N){
+  void Permutate(int ind[],int ilist[],D t[],int n,int N){
     /*
     for(int i=0;i<n;i++){
       printf("%d ind= %d,t= %e\n",i,ind[i],t[i]);
@@ -400,18 +400,18 @@ class REMDInfo{
   void OutputTunnelCount();
 
   //setter
-  void SetTemperature(I ind,D T){temperature[ind]=T;};
-  void SetPressure(I ind,D P){pressure[ind]=P;};
+  void SetTemperature(int ind,D T){temperature[ind]=T;};
+  void SetPressure(int ind,D P){pressure[ind]=P;};
   void SetAllIsExchanged(bool b){for(int i=0;i<nreplica;i++) isExchanged[i]=b;};
   void SetAllIsExchangedGlobal(bool b){for(int i=0;i<nreplica_global;i++) isExchanged[i]=b;};
   
   //getter
-  I GetNmol(){return nmol;};
+  int GetNmol(){return nmol;};
   unsigned long GetStepMax(){return step_max;};
   unsigned long GetInterval(){return interval;};
-  I GetNumReplica(){return nreplica;};
-  I GetNumReplicaGlobal(){return nreplica_global;};
-  I GetReplicaOffset(){ return rank * nreplica; }
+  int GetNumReplica(){return nreplica;};
+  int GetNumReplicaGlobal(){return nreplica_global;};
+  int GetReplicaOffset(){ return rank * nreplica; }
   D GetTemperatureMax(){return temperature_max;};
   D GetTemperatureMin(){return temperature_min;};
   D GetPressureMax(){return pressure_max;};
@@ -421,29 +421,29 @@ class REMDInfo{
   D GetEnergyMin(){return energy_min;};
   D GetVolumeMax(){return volume_max;};
   D GetVolumeMin(){return volume_min;};
-  I GetNumProc(){return nproc;};
-  I GetRank(){return rank;};
-  I GetNumGPU(){return ngpu;};
-  I GetMode(){return mode;};
-  I GetEnsemble(){return ensemble;};
+  int GetNumProc(){return nproc;};
+  int GetRank(){return rank;};
+  int GetNumGPU(){return ngpu;};
+  int GetMode(){return mode;};
+  int GetEnsemble(){return ensemble;};
   char* GetInputDir(){return input_dir;};
   char* GetOutputDir(){return output_dir;};
-  I GetNumBackup(){return nbkup;};
-  I GetNumPointEnergy(){return nenergy;};
+  int GetNumBackup(){return nbkup;};
+  int GetNumPointEnergy(){return nenergy;};
 
-  I GetListType(){return ec_type;};
-  I GetListLength(I type){return pairlist->GetLength(type);};//get length of type th exchange list
-  Pair GetPair(I type,I ind){return pairlist->GetPair(type,ind);};//get exchange ind th pair of type th pair list
-  I GetIndex(I ind){return index[ind];};            //get replica number of ind th temperature
-  D GetTemperature(I ind){return temperature[ind];};//get temperature of ind th replica
-  D GetPressure(I ind){return pressure[ind];};      //get pressure    of ind th replica
-  bool GetIsExchanged(I ind){return isExchanged[ind];};//get isExchanged of ind th replica
-  I GetSumHist(I ind){return histogram[ind]->GetSum();};
-  I GetHistogram(I ind,I v,I p){return histogram[ind]->GetHist(v,p);};
-  D GetVirialAve(I v,I p);
-  //D GetPressAve(I v,I p);
-  //D GetTempAve(I v,I p);
-  Average GetAverages(I,I);
+  int GetListType(){return ec_type;};
+  int GetListLength(int type){return pairlist->GetLength(type);};//get length of type th exchange list
+  Pair GetPair(int type,int ind){return pairlist->GetPair(type,ind);};//get exchange ind th pair of type th pair list
+  int GetIndex(int ind){return index[ind];};            //get replica number of ind th temperature
+  D GetTemperature(int ind){return temperature[ind];};//get temperature of ind th replica
+  D GetPressure(int ind){return pressure[ind];};      //get pressure    of ind th replica
+  bool GetIsExchanged(int ind){return isExchanged[ind];};//get isExchanged of ind th replica
+  int GetSumHist(int ind){return histogram[ind]->GetSum();};
+  int GetHistogram(int ind,int v,int p){return histogram[ind]->GetHist(v,p);};
+  D GetVirialAve(int v,int p);
+  //D GetPressAve(int v,int p);
+  //D GetTempAve(int v,int p);
+  Average GetAverages(int,int);
 
   void ReadTemperatureFromFile(char *filename);
 
