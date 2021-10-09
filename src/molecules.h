@@ -26,6 +26,10 @@
 #include "integrator.h"
 #include "profiler.h"
 
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
 class Molecules{
  private:
 
@@ -51,6 +55,25 @@ class Molecules{
   int mode;
 
   int nthreads;
+  int* is;
+  int* ie;
+  // tmp for integrator
+  double* sum_Ps_omp;
+  dvec3*  sum_Pv_omp;
+  double* sum_rot_omp;
+
+  //constexpr int nlane = nsimd*2;
+  int* jstart;
+  int* jend;
+
+#if defined(__AVX512F__)
+  const int nsimd = 64 / sizeof(FP);
+#elif defined(__AVX2__)
+  const int nsimd = 32 / sizeof(FP);
+#else
+  const int nsimd = 1;
+#endif
+  const int nlane = nsimd;
 
   Molecules
   (const Parameter _param)
@@ -81,6 +104,33 @@ class Molecules{
     std::cout << " Pmode: " << ((mode>>PSHIFT)&MASK);
     std::cout << " Cmode: " << ((mode>>CSHIFT)&MASK);
     std::cout << std::endl;
+#ifdef _OPENMP
+    nthreads = omp_get_max_threads();
+#else
+    nthreads = 1;
+#endif
+    is = new int[nthreads];
+    ie = new int[nthreads];
+    is[0] = 0;
+    ie[0] = (nmol%nthreads == 0) ? nmol/nthreads : nmol/nthreads + 1;
+
+    for(int i=1;i<nthreads;i++){
+      is[i] = ie[i-1];
+      ie[i] = is[i] + ((nmol/nthreads)/nlane)*nlane;
+    }
+    ie[nthreads-1] = nmol;
+    for(int i=0;i<nthreads;i++) printf("%d: (is,ie)= (%d,%d)\n",i,is[i],ie[i]);
+    sum_Ps_omp  = new double[nthreads];
+    sum_Pv_omp  = new  dvec3[nthreads];
+    sum_rot_omp = new double[nthreads];
+
+    jstart = new int[(nmol+nlane-1)/nlane];;
+    jend   = new int[(nmol+nlane-1)/nlane];;
+
+
+#ifdef USE_TBB
+    
+#endif
   };
 
   ~Molecules(){
@@ -92,7 +142,10 @@ class Molecules{
   }
 
   void InitializeProperty(){
-    CalcForcePot();
+    #pragma omp parallel
+    {
+      CalcForcePot();
+    }
     prop.gkT = 6.0*(double)nmol*T;
     CalcProperties();
     prop.H0  = prop.tot;
@@ -119,13 +172,16 @@ class Molecules{
   void ConvertFromAtoms();
 
   void CalcForcePot();
+  template <int> void init_D3D2D1D2D3_PsPv();
+  template <int> void D3D2D1D2D3_PsPv();
   template <int> void D1();
   template <int> void D3();
   template <int> void D2();
   template <int> void D4();
   template <int> void D5();
   template <int> void D6();
-
+  template<int MODE>
+  void ExecuteStep();
   void ExecuteSteps();
 
   dvec3  TranslationalEnergy();
