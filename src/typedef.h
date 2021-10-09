@@ -5,7 +5,7 @@
 #define IntMaxInv (1./(D)IntMax)
 #define IntMaxInvF (1.f/(float)IntMax)
 
-#define I int
+//#define I int
 #define D double
 /*
 typedef struct{
