@@ -94,7 +94,7 @@ class Profiler{
 #ifdef _OPENMP
     const int thread = omp_get_thread_num();
 #else
-    cosnt int thread = 0;
+    const int thread = 0;
 #endif
     s[i][thread] = std::chrono::system_clock::now();
   }
@@ -102,7 +102,7 @@ class Profiler{
 #ifdef _OPENMP
     const int thread = omp_get_thread_num();
 #else
-    cosnt int thread = 0;
+    const int thread = 0;
 #endif
     e[i][thread] = std::chrono::system_clock::now();
     elapsed[i][thread] += e[i][thread] - s[i][thread];
