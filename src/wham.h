@@ -15,9 +15,9 @@ class WHAM{
   D dos_min;
   D **fe_surface;
   D *g;
-  I pot_num,vol_num;
-  I pot_max = 0, pot_min = 0;
-  I vol_max = 0, vol_min = 0;
+  int pot_num,vol_num;
+  int pot_max = 0, pot_min = 0;
+  int vol_max = 0, vol_min = 0;
 
   D ent[NumPress][NumTemp];
   D hc[NumPress][NumTemp];

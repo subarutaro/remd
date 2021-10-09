@@ -10,7 +10,7 @@ WHAM::WHAM(REMDInfo *remdinfo){
       dens_state[i][j] = 0.;
   }}
 
-  const I nreplica = remdinfo->GetNumReplica();
+  const int nreplica = remdinfo->GetNumReplica();
   SAFE_MALLOC(g,sizeof(D)*nreplica,D);
   for(int i=0;i<nreplica;++i){ g[i]=0.;}
 
@@ -26,9 +26,9 @@ static inline double sum_log(double log_a,double log_b){
 
 void WHAM::CalcDensState(REMDInfo *remdinfo){
   //printf("====WHAM::CalcDensState====\n");
-  const I nmol     = remdinfo->GetNmol();
-  const I nreplica = remdinfo->GetNumReplica();
-  const I nproc    = remdinfo->GetNumProc();
+  const int nmol     = remdinfo->GetNmol();
+  const int nreplica = remdinfo->GetNumReplica();
+  const int nproc    = remdinfo->GetNumProc();
   //printf("nproc=%d\n",nproc);
 
 #pragma omp parallel for
@@ -38,14 +38,14 @@ void WHAM::CalcDensState(REMDInfo *remdinfo){
       const D p = remdinfo->GetAbsoluteEnergy(j);
       D denominator=0.,numerator=0.;
       for(int rep=0;rep<nreplica;++rep){
-	const I hst = remdinfo->GetHistogram(rep,i,j);
+	const int hst = remdinfo->GetHistogram(rep,i,j);
 	if(hst>0){
-	  const I ind   = remdinfo->GetIndex(rep);
+	  const int ind   = remdinfo->GetIndex(rep);
 	  const D press = remdinfo->GetPressure(ind);
 	  const D temp  = remdinfo->GetTemperature(ind);
 	  const D h     = (p+press*v)*nmol;
 	  const D bf    = h/(temp);
-	  const I sum   = remdinfo->GetSumHist(rep);
+	  const int sum   = remdinfo->GetSumHist(rep);
 	  numerator     = sum_log(log((D)hst),numerator);
 	  denominator   = sum_log(log((D)sum)-bf+g[rep],denominator);
 	}
@@ -83,13 +83,13 @@ void WHAM::CalcDensState(REMDInfo *remdinfo){
 
 void WHAM::CalcG(REMDInfo *remdinfo){
   //printf("====WHAM::CalcG====\n");
-  const I nmol = remdinfo->GetNmol();
-  const I nreplica = remdinfo->GetNumReplica();
-  const I nproc= remdinfo->GetNumProc();
+  const int nmol = remdinfo->GetNmol();
+  const int nreplica = remdinfo->GetNumReplica();
+  const int nproc= remdinfo->GetNumProc();
 
 #pragma omp parallel for
   for(int rep=0;rep<nreplica;++rep){
-    const I ind   = remdinfo->GetIndex(rep);
+    const int ind   = remdinfo->GetIndex(rep);
     const D press = remdinfo->GetPressure(ind);
     const D temp  = remdinfo->GetTemperature(ind);
     D tmp=0.;
@@ -110,8 +110,8 @@ void WHAM::CalcG(REMDInfo *remdinfo){
 
 void WHAM::CalcPhysValue(REMDInfo *remdinfo){
   //printf("====WHAM::CalcPhysValue====\n");
-  const I nmol = remdinfo->GetNmol();
-  const I nproc= remdinfo->GetNumProc();
+  const int nmol = remdinfo->GetNmol();
+  const int nproc= remdinfo->GetNumProc();
   const D Tmax = remdinfo->GetTemperatureMax();
   const D Tmin = remdinfo->GetTemperatureMin();
   const D DeltaT = (Tmax -Tmin)/(D)(NumTemp-1);
@@ -278,7 +278,7 @@ void WHAM::Output(REMDInfo *remdinfo){
   const int nreplica = remdinfo->GetNumReplica();
   const int nmol = remdinfo->GetNmol();
   for(int rep=0;rep<nreplica;rep++){
-    const I ind   = remdinfo->GetIndex(rep);
+    const int ind   = remdinfo->GetIndex(rep);
     const D press = remdinfo->GetPressure(ind);
     const D temp  = remdinfo->GetTemperature(ind);
     const char *output_dir = remdinfo->GetOutputDir();
