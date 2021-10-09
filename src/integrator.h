@@ -109,7 +109,7 @@ static inline dvec44 S_T(const dvec4 q){
   return tmp;
 }
 
-static inline dvec4 P1(const dvec4 q){
+inline dvec4 P1(const dvec4& q){
   dvec4 tmp;
   tmp[0] =-q[1];
   tmp[1] = q[0];
@@ -118,7 +118,7 @@ static inline dvec4 P1(const dvec4 q){
   return tmp;
 }
 
-static inline dvec4 P2(const dvec4 q){
+inline dvec4 P2(const dvec4& q){
   dvec4 tmp;
   tmp[0] =-q[2];
   tmp[1] =-q[3];
@@ -127,7 +127,7 @@ static inline dvec4 P2(const dvec4 q){
   return tmp;
 }
 
-static inline dvec4 P3(const dvec4 q){
+inline dvec4 P3(const dvec4& q){
   dvec4 tmp;
   tmp[0] =-q[3];
   tmp[1] = q[2];
