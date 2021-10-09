@@ -108,6 +108,7 @@ If you use this package, please cite out paper above.
 
 ## how to run
 REMD_ROOT is the directory of this repository.
+
 cd ${REMD_ROOT}
 
 make -f makefile.xxx # xxx is gnu, intel or cuda
