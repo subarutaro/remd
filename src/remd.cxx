@@ -29,8 +29,8 @@ REMD::REMD(std::string input){
 
   remdinfo = new REMDInfo(param);
 
-  const I nreplica = remdinfo->GetNumReplica();
-  const I offset   = remdinfo->GetReplicaOffset(); // for MPI
+  const int nreplica = remdinfo->GetNumReplica();
+  const int offset   = remdinfo->GetReplicaOffset(); // for MPI
 
   assert(!(param.confined == 1 && (param.pconstant == 1 || param.pconstant == 3)));
   assert(!(param.confined == 2 && (param.pconstant == 1 || param.pconstant == 2)));
@@ -121,7 +121,7 @@ REMD::REMD(std::string input){
 
     const int rank = remdinfo->GetRank();
     if(rank == 0){
-      const I nreplica_global = remdinfo->GetNumReplicaGlobal();
+      const int nreplica_global = remdinfo->GetNumReplicaGlobal();
       pot = new D[nreplica_global];
       vol = new D[nreplica_global];
       ave = new Average[nreplica_global];
@@ -192,7 +192,7 @@ REMD::REMD(std::string input){
 };
 
 REMD::~REMD(){
-  const I nreplica = remdinfo->GetNumReplica();
+  const int nreplica = remdinfo->GetNumReplica();
   for(int rep=0;rep<nreplica;rep++){
     Profiler p = md[rep]->prof + md[rep]->fclcltr->prof;
     p.print();
@@ -220,7 +220,7 @@ REMD::~REMD(){
     delete[] vir;
   }
   if(md != nullptr){
-    const I nreplica = remdinfo->GetNumReplica();
+    const int nreplica = remdinfo->GetNumReplica();
     for(int i=0;i<nreplica;++i){
       std::cout << "delete md " << i << std::endl;
       delete md[i];
@@ -233,8 +233,8 @@ REMD::~REMD(){
 };
 
 void REMD::ExecuteMDs(){
-  const I nreplica = remdinfo->GetNumReplica();
-  const I rank     = remdinfo->GetRank();
+  const int nreplica = remdinfo->GetNumReplica();
+  const int rank     = remdinfo->GetRank();
   if(ngpus>0){
 #ifdef ENABLE_GPU
     mdgpu->ExecuteSteps(remdinfo->temperature,remdinfo->pressure);
@@ -268,11 +268,11 @@ void REMD::ExecuteREMD(){
   const unsigned long step_max = remdinfo->GetStepMax();
   const unsigned long interval = remdinfo->GetInterval();
 
-  const I nreplica = remdinfo->GetNumReplica();
-  //const I nprocs   = remdinfo->GetNumProc();
-  const I rank = remdinfo->GetRank();
-  //const I num_bkup = remdinfo->GetNumBackup();
-  //const I num_ene  = remdinfo->GetNumPointEnergy();
+  const int nreplica = remdinfo->GetNumReplica();
+  //const int nprocs   = remdinfo->GetNumProc();
+  const int rank = remdinfo->GetRank();
+  //const int num_bkup = remdinfo->GetNumBackup();
+  //const int num_ene  = remdinfo->GetNumPointEnergy();
 
   if(param.adjustor == 1){
     std::cout << "adjusting conditon" << std::endl;
@@ -290,7 +290,7 @@ void REMD::ExecuteREMD(){
   
   for(unsigned long s=0;s<step_max/interval;++s){
     ExecuteMDs();
-#if 1
+#if 0
     if(s%1000) std::cerr << "=== " << rank << " " << s << " intervals done ===" << std::endl;
 #else
     for(int rep=0;rep<nreplica;rep++){
@@ -458,17 +458,17 @@ void REMD::ExecuteREMD(){
 static const D kb = 1.0;
 static D random_number(){return ((D)rand() / (D)RAND_MAX);};
 
-D REMD::CalcExchangeProb(I type,I ind){
+D REMD::CalcExchangeProb(int type,int ind){
   const Pair pair = remdinfo->GetPair(type,ind);
-  const I ind1    = remdinfo->GetIndex(pair.a);
-  const I ind2    = remdinfo->GetIndex(pair.b);
+  const int ind1    = remdinfo->GetIndex(pair.a);
+  const int ind2    = remdinfo->GetIndex(pair.b);
 
   const D beta1  = 1./remdinfo->GetTemperature(ind1);
   const D beta2  = 1./remdinfo->GetTemperature(ind2);
   const D press1 = remdinfo->GetPressure(ind1);
   const D press2 = remdinfo->GetPressure(ind2);
 
-  const I ensemble = remdinfo->GetEnsemble();
+  const int ensemble = remdinfo->GetEnsemble();
   D delta;
   delta = (beta2 - beta1)*(pot[ind1]-pot[ind2]);
   if(((ensemble>>PSHIFT) & MASK) > 0){
@@ -478,7 +478,7 @@ D REMD::CalcExchangeProb(I type,I ind){
 };
 
 void REMD::ReplicaExchange(){
-  const I nreplica    = remdinfo->GetNumReplica();
+  const int nreplica    = remdinfo->GetNumReplica();
 
   if(false) if(remdinfo->GetRank() == 0){
     printf("(debug:result)");
@@ -491,8 +491,8 @@ void REMD::ReplicaExchange(){
   //exchange temperature and pressure
   if(remdinfo->GetRank() == 0){
     remdinfo->SetAllIsExchangedGlobal(false);
-    const I ec_type     = step%4;//set exchange pair list number(0 to 3 for 2D rem,0 or 1 for 1D)
-    const I list_length = remdinfo->GetListLength(ec_type);//set exhcange list length of ec_type
+    const int ec_type     = step%4;//set exchange pair list number(0 to 3 for 2D rem,0 or 1 for 1D)
+    const int list_length = remdinfo->GetListLength(ec_type);//set exhcange list length of ec_type
     for(int i=0;i<list_length;++i){
       const Pair pair = remdinfo->GetPair(ec_type,i);
       if(CalcExchangeProb(ec_type,i)>random_number()){
@@ -504,6 +504,7 @@ void REMD::ReplicaExchange(){
     remdinfo->CheckTunneling();
   }
   remdinfo->BroadcastConditionAndIndex();
+#ifdef ENABLE_MPI
   MPI_Barrier(MPI_COMM_WORLD);
 
   if(false) if(remdinfo->GetRank() == 0){
@@ -513,7 +514,7 @@ void REMD::ReplicaExchange(){
     }
     printf("\n");
   }
-
+#endif
   //set temperature of all replica from remdinfo
   //remdinfo has conditions of i th replica in order
   if(remdinfo->GetNumGPU()<=0){
@@ -535,9 +536,9 @@ void REMD::DesignedWalkReplicaExchange(){
   fprintf(stderr,"DWREM is not supported with MPI\n");
   Abort();
 #endif
-  const I nreplica    = remdinfo->GetNumReplica();
-  const I ec_type     = remdinfo->GetListType();
-  const I list_length = remdinfo->GetListLength(ec_type);//set exhcange list length of ec_type
+  const int nreplica    = remdinfo->GetNumReplica();
+  const int ec_type     = remdinfo->GetListType();
+  const int list_length = remdinfo->GetListLength(ec_type);//set exhcange list length of ec_type
 
   //exchange temperature and pressure
   bool isAllExchanged = true;
@@ -794,10 +795,10 @@ void REMD::ReplicaPermutation(){// now only for N=4
 };
 
 void REMD::IncrementHistogram(){
-  const I nreplica = remdinfo->GetNumReplica();
+  const int nreplica = remdinfo->GetNumReplica();
 
   for(int i=0;i<nreplica;++i){
-    const I ind = remdinfo->GetIndex(i);
+    const int ind = remdinfo->GetIndex(i);
     const D p = pot[ind]/(D)remdinfo->GetNmol();
     const D v = vol[ind]/(D)remdinfo->GetNmol();
     remdinfo->IncrementHistogram(v,p,i);
@@ -808,11 +809,11 @@ void REMD::IncrementHistogram(){
 
 void REMD::OutputBackUp(){
   printf("===OutputBackUp() of %ld REMD step start===\n",step);
-  const I nreplica = remdinfo->GetNumReplica();
+  const int nreplica = remdinfo->GetNumReplica();
   const char *output_dir = remdinfo->GetOutputDir();
 
   for(int i=0;i<nreplica;++i){
-    const I ind   = i;
+    const int ind   = i;
     //const D temp  = md[i]->GetTemperature();
     //const D press = md[i]->GetPressure();
     //iomanager[ind]->UpdateOutputs(md[ind]);
@@ -872,7 +873,7 @@ void REMD::OutputIndex(){
 };
 
 void REMD::ExecuteWHAM(){
-  const I iter = 1000;
+  const int iter = 1000;
   for(int i=0;i<iter;++i){
     wham->CalcDensState(remdinfo);
     wham->CalcG(remdinfo);
@@ -925,7 +926,7 @@ void REMD::OutputBinary(){
 }
 
 void REMD::OutputDebugInfo(){
-  I nmol = remdinfo->GetNumReplica();
+  int nmol = remdinfo->GetNumReplica();
   char *output_dir = remdinfo->GetOutputDir();
   char filename[256];
 

@@ -41,7 +41,7 @@ class REMD{
   std::fstream *binary = nullptr;
 
   //function for replica exchange
-  D    CalcExchangeProb(I type,I ind);
+  D    CalcExchangeProb(int type,int ind);
   void ReplicaExchange();
   void DesignedWalkReplicaExchange();
   //template<uint N>
@@ -72,7 +72,7 @@ public:
   //void ExecuteREMDgpuNVE(unsigned long step_max,unsigned long interval);
   //void ExecuteREMDgpuNVT(unsigned long step_max,unsigned long interval);
   //void ExecuteREMDgpuNPT(unsigned long step_max,unsigned long interval);
-  //void ExecuteREMDgpuManySample(I step_max,I interval,I ngpu);
+  //void ExecuteREMDgpuManySample(int step_max,int interval,int ngpu);
   void ExecuteREMD();
   void ExecuteMDs();
   int CheckVarIncludedinRange();
