@@ -109,7 +109,11 @@ If you use this package, please cite out paper above.
 ## how to run
 REMD_ROOT is the directory of this repository.
 cd ${REMD_ROOT}
+
 make -f makefile.xxx # xxx is gnu, intel or cuda
+
 cd ${WORKING_DIRECTORY}
+
 mkdir -p ${OUTPUT_DIRECTORY_PATH}/cdv
+
 ${REMD_ROOT}/src/md.out ${INPUT_DIRECTORY_PATH}/XXX.inp
