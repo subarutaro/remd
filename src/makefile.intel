@@ -26,14 +26,12 @@ CFLAGS += -DUSE_FP32
 
 CFLAGS += -DENABLE_MPI
 
-CFLAGS += -DUSE_TBB -ltbb
-
 #OMPFLAGS += -fopenmp
 OMPFLAGS += -qopenmp
 #CFLAGS +=  -lpthread -lgomp -lcudart
 
 #CXXFLAGS = -std=c++17
-CXXFLAGS = -std=c++14
+CXXFLAGS = -std=c++17
 CXXFLAGS += -g
 
 CXXFLAGS += -xAVX2
