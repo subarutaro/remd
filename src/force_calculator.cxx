@@ -35,7 +35,18 @@ ForceCalculator::ForceCalculator
     fwall = (dvec2*)malloc(nfwall*sizeof(dvec2));
     CalcWallForce();
   }
-  nthreads  = _p.nthreads;
+#ifdef _OPENMP
+  #pragma omp parallel
+  {
+    nthreads  = omp_get_num_threads();
+  }
+#else
+  nthreads  = 1;
+#endif
+  lj_omp   = new FP[nthreads];
+  clmb_omp = new FP[nthreads];
+  vir_omp  = new FPvec[nthreads];
+  wall_omp = new FP[nthreads];
   SetKvec();
 }
 
@@ -926,129 +937,134 @@ void ForceCalculator::Switching(Molecule *m,Atom *a,const MolTypeList mtl,const 
     gvz_i += fz*dgz;							\
   }									\
   if constexpr (nsite == 4){						\
-  fx = fy = fz = e = ZERO;						\
-  KERNEL_LJ(0,j+0*offset);							\
-  fx -= dswx*e;								\
-  fy -= dswy*e;								\
-  fz -= dswz*e;								\
-  gfx_i += fx;								\
-  gfy_i += fy;								\
-  gfz_i += fz;								\
-  gvx_i += fx*dgx;							\
-  gvy_i += fy*dgy;							\
-  gvz_i += fz*dgz;							\
-  fx = fy = fz = e = ZERO;						\
-  KERNEL_CLMB(1,j+1*offset);							\
-  KERNEL_CLMB(1,j+2*offset);							\
-  KERNEL_CLMB(1,j+3*offset);							\
-  fx -= dswx*e;								\
-  fy -= dswy*e;								\
-  fz -= dswz*e;								\
-  gfx_i += fx;								\
-  gfy_i += fy;								\
-  gfz_i += fz;								\
-  gvx_i += fx*dgx;							\
-  gvy_i += fy*dgy;							\
-  gvz_i += fz*dgz;							\
-  fx = fy = fz = e = ZERO;						\
-  KERNEL_CLMB(2,j+1*offset);							\
-  KERNEL_CLMB(2,j+2*offset);							\
-  KERNEL_CLMB(2,j+3*offset);							\
-  fx -= dswx*e;								\
-  fy -= dswy*e;								\
-  fz -= dswz*e;								\
-  gfx_i += fx;								\
-  gfy_i += fy;								\
-  gfz_i += fz;								\
-  gvx_i += fx*dgx;							\
-  gvy_i += fy*dgy;							\
-  gvz_i += fz*dgz;							\
-  fx = fy = fz = e = ZERO;						\
-  KERNEL_CLMB(3,j+1*offset);						\
-  KERNEL_CLMB(3,j+2*offset);						\
-  KERNEL_CLMB(3,j+3*offset);						\
-  fx -= dswx*e;								\
-  fy -= dswy*e;								\
-  fz -= dswz*e;								\
-  gfx_i += fx;								\
-  gfy_i += fy;								\
-  gfz_i += fz;								\
-  gvx_i += fx*dgx;							\
-  gvy_i += fy*dgy;							\
-  gvz_i += fz*dgz;							\
+    fx = fy = fz = e = ZERO;						\
+    KERNEL_LJ(0,j+0*offset);						\
+    fx -= dswx*e;							\
+    fy -= dswy*e;							\
+    fz -= dswz*e;							\
+    gfx_i += fx;							\
+    gfy_i += fy;							\
+    gfz_i += fz;							\
+    gvx_i += fx*dgx;							\
+    gvy_i += fy*dgy;							\
+    gvz_i += fz*dgz;							\
+    fx = fy = fz = e = ZERO;						\
+    KERNEL_CLMB(1,j+1*offset);						\
+    KERNEL_CLMB(1,j+2*offset);						\
+    KERNEL_CLMB(1,j+3*offset);						\
+    fx -= dswx*e;							\
+    fy -= dswy*e;							\
+    fz -= dswz*e;							\
+    gfx_i += fx;							\
+    gfy_i += fy;							\
+    gfz_i += fz;							\
+    gvx_i += fx*dgx;							\
+    gvy_i += fy*dgy;							\
+    gvz_i += fz*dgz;							\
+    fx = fy = fz = e = ZERO;						\
+    KERNEL_CLMB(2,j+1*offset);						\
+    KERNEL_CLMB(2,j+2*offset);						\
+    KERNEL_CLMB(2,j+3*offset);						\
+    fx -= dswx*e;							\
+    fy -= dswy*e;							\
+    fz -= dswz*e;							\
+    gfx_i += fx;							\
+    gfy_i += fy;							\
+    gfz_i += fz;							\
+    gvx_i += fx*dgx;							\
+    gvy_i += fy*dgy;							\
+    gvz_i += fz*dgz;							\
+    fx = fy = fz = e = ZERO;						\
+    KERNEL_CLMB(3,j+1*offset);						\
+    KERNEL_CLMB(3,j+2*offset);						\
+    KERNEL_CLMB(3,j+3*offset);						\
+    fx -= dswx*e;							\
+    fy -= dswy*e;							\
+    fz -= dswz*e;							\
+    gfx_i += fx;							\
+    gfy_i += fy;							\
+    gfz_i += fz;							\
+    gvx_i += fx*dgx;							\
+    gvy_i += fy*dgy;							\
+    gvz_i += fz*dgz;							\
   }									\
-   if constexpr (nsite == 5){						\
-     fx = fy = fz = e = ZERO;						\
-     KERNEL_LJ(0,5*j+0);						\
-     fx -= dswx*e;							\
-     fy -= dswy*e;							\
-     fz -= dswz*e;							\
-     gfx_i += fx;							\
-     gfy_i += fy;							\
-     gfz_i += fz;							\
-     gvx_i += fx*dgx;							\
-     gvy_i += fy*dgy;							\
-     gvz_i += fz*dgz;							\
-     fx = fy = fz = e = ZERO;						\
-     KERNEL_CLMB(1,5*j+1);						\
-     KERNEL_CLMB(1,5*j+2);						\
-     KERNEL_CLMB(1,5*j+3);						\
-     KERNEL_CLMB(1,5*j+4);						\
-     fx -= dswx*e;							\
-     fy -= dswy*e;							\
-     fz -= dswz*e;							\
-     gfx_i += fx;							\
-     gfy_i += fy;							\
-     gfz_i += fz;							\
-     gvx_i += fx*dgx;							\
-     gvy_i += fy*dgy;							\
-     gvz_i += fz*dgz;							\
-     fx = fy = fz = e = ZERO;						\
-     KERNEL_CLMB(2,5*j+1);						\
-     KERNEL_CLMB(2,5*j+2);						\
-     KERNEL_CLMB(2,5*j+3);						\
-     KERNEL_CLMB(2,5*j+4);						\
-     fx -= dswx*e;							\
-     fy -= dswy*e;							\
-     fz -= dswz*e;							\
-     gfx_i += fx;							\
-     gfy_i += fy;							\
-     gfz_i += fz;							\
-     gvx_i += fx*dgx;							\
-     gvy_i += fy*dgy;							\
-     gvz_i += fz*dgz;							\
-     fx = fy = fz = e = ZERO;						\
-     KERNEL_CLMB(3,5*j+1);						\
-     KERNEL_CLMB(3,5*j+2);						\
-     KERNEL_CLMB(3,5*j+3);						\
-     KERNEL_CLMB(3,5*j+4);						\
-     fx -= dswx*e;							\
-     fy -= dswy*e;							\
-     fz -= dswz*e;							\
-     gfx_i += fx;							\
-     gfy_i += fy;							\
-     gfz_i += fz;							\
-     gvx_i += fx*dgx;							\
-     gvy_i += fy*dgy;							\
-     gvz_i += fz*dgz;							\
-     fx = fy = fz = e = ZERO;						\
-     KERNEL_CLMB(4,5*j+1);						\
-     KERNEL_CLMB(4,5*j+2);						\
-     KERNEL_CLMB(4,5*j+3);						\
-     KERNEL_CLMB(4,5*j+4);						\
-     fx -= dswx*e;							\
-     fy -= dswy*e;							\
-     fz -= dswz*e;							\
-     gfx_i += fx;							\
-     gfy_i += fy;							\
-     gfz_i += fz;							\
-     gvx_i += fx*dgx;							\
-     gvy_i += fy*dgy;							\
-     gvz_i += fz*dgz;							\
-   }
+  if constexpr (nsite == 5){						\
+    fx = fy = fz = e = ZERO;						\
+    KERNEL_LJ(0,5*j+0);							\
+    fx -= dswx*e;							\
+    fy -= dswy*e;							\
+    fz -= dswz*e;							\
+    gfx_i += fx;							\
+    gfy_i += fy;							\
+    gfz_i += fz;							\
+    gvx_i += fx*dgx;							\
+    gvy_i += fy*dgy;							\
+    gvz_i += fz*dgz;							\
+    fx = fy = fz = e = ZERO;						\
+    KERNEL_CLMB(1,5*j+1);						\
+    KERNEL_CLMB(1,5*j+2);						\
+    KERNEL_CLMB(1,5*j+3);						\
+    KERNEL_CLMB(1,5*j+4);						\
+    fx -= dswx*e;							\
+    fy -= dswy*e;							\
+    fz -= dswz*e;							\
+    gfx_i += fx;							\
+    gfy_i += fy;							\
+    gfz_i += fz;							\
+    gvx_i += fx*dgx;							\
+    gvy_i += fy*dgy;							\
+    gvz_i += fz*dgz;							\
+    fx = fy = fz = e = ZERO;						\
+    KERNEL_CLMB(2,5*j+1);						\
+    KERNEL_CLMB(2,5*j+2);						\
+    KERNEL_CLMB(2,5*j+3);						\
+    KERNEL_CLMB(2,5*j+4);						\
+    fx -= dswx*e;							\
+    fy -= dswy*e;							\
+    fz -= dswz*e;							\
+    gfx_i += fx;							\
+    gfy_i += fy;							\
+    gfz_i += fz;							\
+    gvx_i += fx*dgx;							\
+    gvy_i += fy*dgy;							\
+    gvz_i += fz*dgz;							\
+    fx = fy = fz = e = ZERO;						\
+    KERNEL_CLMB(3,5*j+1);						\
+    KERNEL_CLMB(3,5*j+2);						\
+    KERNEL_CLMB(3,5*j+3);						\
+    KERNEL_CLMB(3,5*j+4);						\
+    fx -= dswx*e;							\
+    fy -= dswy*e;							\
+    fz -= dswz*e;							\
+    gfx_i += fx;							\
+    gfy_i += fy;							\
+    gfz_i += fz;							\
+    gvx_i += fx*dgx;							\
+    gvy_i += fy*dgy;							\
+    gvz_i += fz*dgz;							\
+    fx = fy = fz = e = ZERO;						\
+    KERNEL_CLMB(4,5*j+1);						\
+    KERNEL_CLMB(4,5*j+2);						\
+    KERNEL_CLMB(4,5*j+3);						\
+    KERNEL_CLMB(4,5*j+4);						\
+    fx -= dswx*e;							\
+    fy -= dswy*e;							\
+    fz -= dswz*e;							\
+    gfx_i += fx;							\
+    gfy_i += fy;							\
+    gfz_i += fz;							\
+    gvx_i += fx*dgx;							\
+    gvy_i += fy*dgy;							\
+    gvz_i += fz*dgz;							\
+  }
 
 template <int nsite>
-void ForceCalculator::SwitchingTuning(Molecule* m,Atom* a,const MolTypeList mtl,const dvec3 L,const int nmol,Property& prop,const int* jstart,const int* jend,const int nlane){
+void ForceCalculator::SwitchingTuning(Molecule* m,Atom* a,const MolTypeList mtl,const dvec3 L,const int nmol,Property& prop,const int* jstart,const int* jend,const int nlane,const int* is,const int* ie){
+#ifdef _OPENMP
+  const int thread = omp_get_thread_num();
+#else
+  const int thread = 0;
+#endif
   const FP rc = rcut;
   const FP rl = rswitch;
   const FP rlc = rl - rc;
@@ -1067,83 +1083,96 @@ void ForceCalculator::SwitchingTuning(Molecule* m,Atom* a,const MolTypeList mtl,
 #endif
 
   const int offset = ((nmol + nlane - 1)/nlane)*nlane;
+  const int natom = nsite * offset;
+  //if(first_call)
+    {
+#pragma omp single
+    {
 #ifdef __INTEL_COMPILER
-  if(gx  == nullptr) gx  = (FP*)_mm_malloc(nmol*sizeof(FP),64);
-  if(gy  == nullptr) gy  = (FP*)_mm_malloc(nmol*sizeof(FP),64);
-  if(gz  == nullptr) gz  = (FP*)_mm_malloc(nmol*sizeof(FP),64);
-  if(gfx == nullptr) gfx = (FP*)_mm_malloc(nmol*sizeof(FP),64);
-  if(gfy == nullptr) gfy = (FP*)_mm_malloc(nmol*sizeof(FP),64);
-  if(gfz == nullptr) gfz = (FP*)_mm_malloc(nmol*sizeof(FP),64);
-  if(gvx == nullptr) gvx = (FP*)_mm_malloc(nmol*sizeof(FP),64);
-  if(gvy == nullptr) gvy = (FP*)_mm_malloc(nmol*sizeof(FP),64);
-  if(gvz == nullptr) gvz = (FP*)_mm_malloc(nmol*sizeof(FP),64);
-  if(glj == nullptr) glj = (FP*)_mm_malloc(nmol*sizeof(FP),64);
-  if(gcl == nullptr) gcl = (FP*)_mm_malloc(nmol*sizeof(FP),64);
+      if(gx  == nullptr) gx  = (FP*)_mm_malloc(nmol*sizeof(FP),64);
+      if(gy  == nullptr) gy  = (FP*)_mm_malloc(nmol*sizeof(FP),64);
+      if(gz  == nullptr) gz  = (FP*)_mm_malloc(nmol*sizeof(FP),64);
+      if(gfx == nullptr) gfx = (FP*)_mm_malloc(nmol*sizeof(FP),64);
+      if(gfy == nullptr) gfy = (FP*)_mm_malloc(nmol*sizeof(FP),64);
+      if(gfz == nullptr) gfz = (FP*)_mm_malloc(nmol*sizeof(FP),64);
+      if(gvx == nullptr) gvx = (FP*)_mm_malloc(nmol*sizeof(FP),64);
+      if(gvy == nullptr) gvy = (FP*)_mm_malloc(nmol*sizeof(FP),64);
+      if(gvz == nullptr) gvz = (FP*)_mm_malloc(nmol*sizeof(FP),64);
+      if(glj == nullptr) glj = (FP*)_mm_malloc(nmol*sizeof(FP),64);
+      if(gcl == nullptr) gcl = (FP*)_mm_malloc(nmol*sizeof(FP),64);
 #else
-  if(gx  == nullptr) gx  = new FP[nmol];
-  if(gy  == nullptr) gy  = new FP[nmol];
-  if(gz  == nullptr) gz  = new FP[nmol];
-  if(gfx == nullptr) gfx = new FP[nmol];
-  if(gfy == nullptr) gfy = new FP[nmol];
-  if(gfz == nullptr) gfz = new FP[nmol];
-  if(gvx == nullptr) gvx = new FP[nmol];
-  if(gvy == nullptr) gvy = new FP[nmol];
-  if(gvz == nullptr) gvz = new FP[nmol];
-  if(glj == nullptr) glj = new FP[nmol];
-  if(gcl == nullptr) gcl = new FP[nmol];
+      if(gx  == nullptr) gx  = new FP[nmol];
+      if(gy  == nullptr) gy  = new FP[nmol];
+      if(gz  == nullptr) gz  = new FP[nmol];
+      if(gfx == nullptr) gfx = new FP[nmol];
+      if(gfy == nullptr) gfy = new FP[nmol];
+      if(gfz == nullptr) gfz = new FP[nmol];
+      if(gvx == nullptr) gvx = new FP[nmol];
+      if(gvy == nullptr) gvy = new FP[nmol];
+      if(gvz == nullptr) gvz = new FP[nmol];
+      if(glj == nullptr) glj = new FP[nmol];
+      if(gcl == nullptr) gcl = new FP[nmol];
 #endif
-  assert(gx  != nullptr);
-  assert(gy  != nullptr);
-  assert(gz  != nullptr);
-  assert(gfx != nullptr);
-  assert(gfy != nullptr);
-  assert(gfz != nullptr);
-  assert(gvx != nullptr);
-  assert(gvy != nullptr);
-  assert(gvz != nullptr);
-  assert(glj != nullptr);
-  assert(gcl != nullptr);
-  for(int i=0;i<nmol;i++){
+      assert(gx  != nullptr);
+      assert(gy  != nullptr);
+      assert(gz  != nullptr);
+      assert(gfx != nullptr);
+      assert(gfy != nullptr);
+      assert(gfz != nullptr);
+      assert(gvx != nullptr);
+      assert(gvy != nullptr);
+      assert(gvz != nullptr);
+      assert(glj != nullptr);
+      assert(gcl != nullptr);
+#ifdef __INTEL_COMPILER
+      if(ax  == nullptr) ax  = (FP*)_mm_malloc(natom*sizeof(FP),64);
+      if(ay  == nullptr) ay  = (FP*)_mm_malloc(natom*sizeof(FP),64);
+      if(az  == nullptr) az  = (FP*)_mm_malloc(natom*sizeof(FP),64);
+      if(afx == nullptr) afx = (FP*)_mm_malloc(natom*sizeof(FP),64);
+      if(afy == nullptr) afy = (FP*)_mm_malloc(natom*sizeof(FP),64);
+      if(afz == nullptr) afz = (FP*)_mm_malloc(natom*sizeof(FP),64);
+      if(as  == nullptr) as  = (FP*)_mm_malloc(natom*sizeof(FP),64);
+      if(ae  == nullptr) ae  = (FP*)_mm_malloc(natom*sizeof(FP),64);
+      if(aq  == nullptr) aq  = (FP*)_mm_malloc(natom*sizeof(FP),64);
+#else
+      if(ax  == nullptr) ax  = new FP[natom];
+      if(ay  == nullptr) ay  = new FP[natom];
+      if(az  == nullptr) az  = new FP[natom];
+      if(afx == nullptr) afx = new FP[natom];
+      if(afy == nullptr) afy = new FP[natom];
+      if(afz == nullptr) afz = new FP[natom];
+      if(as  == nullptr) as  = new FP[natom];
+      if(ae  == nullptr) ae  = new FP[natom];
+      if(aq  == nullptr) aq  = new FP[natom];
+#endif
+      assert(ax  != nullptr);
+      assert(ay  != nullptr);
+      assert(az  != nullptr);
+      assert(afx != nullptr);
+      assert(afy != nullptr);
+      assert(afz != nullptr);
+      assert(as  != nullptr);
+      assert(ae  != nullptr);
+      assert(aq  != nullptr);
+    } // omp single
+  } // fist_call
+  #pragma omp simd
+  for(int i=is[thread];i<ie[thread];i++){
     gx[i] = m[i].r[0] * L[0];
     gy[i] = m[i].r[1] * L[1];
     gz[i] = m[i].r[2] * L[2];
-    gfx[i] = gfy[i] = gfz[i] = ZERO;
-    gvx[i] = gvy[i] = gvz[i] = ZERO;
-    glj[i] = gcl[i] = ZERO;
+    gfx[i] = ZERO;
+    gfy[i] = ZERO;
+    gfz[i] = ZERO;
+    gvx[i] = ZERO;
+    gvy[i] = ZERO;
+    gvz[i] = ZERO;
+    glj[i] = ZERO;
+    gcl[i] = ZERO;
   }
 
-  const int natom = nsite * offset;
-#ifdef __INTEL_COMPILER
-  if(ax  == nullptr) ax  = (FP*)_mm_malloc(natom*sizeof(FP),64);
-  if(ay  == nullptr) ay  = (FP*)_mm_malloc(natom*sizeof(FP),64);
-  if(az  == nullptr) az  = (FP*)_mm_malloc(natom*sizeof(FP),64);
-  if(afx == nullptr) afx = (FP*)_mm_malloc(natom*sizeof(FP),64);
-  if(afy == nullptr) afy = (FP*)_mm_malloc(natom*sizeof(FP),64);
-  if(afz == nullptr) afz = (FP*)_mm_malloc(natom*sizeof(FP),64);
-  if(as  == nullptr) as  = (FP*)_mm_malloc(natom*sizeof(FP),64);
-  if(ae  == nullptr) ae  = (FP*)_mm_malloc(natom*sizeof(FP),64);
-  if(aq  == nullptr) aq  = (FP*)_mm_malloc(natom*sizeof(FP),64);
-#else
-  if(ax  == nullptr) ax  = new FP[natom];
-  if(ay  == nullptr) ay  = new FP[natom];
-  if(az  == nullptr) az  = new FP[natom];
-  if(afx == nullptr) afx = new FP[natom];
-  if(afy == nullptr) afy = new FP[natom];
-  if(afz == nullptr) afz = new FP[natom];
-  if(as  == nullptr) as  = new FP[natom];
-  if(ae  == nullptr) ae  = new FP[natom];
-  if(aq  == nullptr) aq  = new FP[natom];
-#endif
-  assert(ax  != nullptr);
-  assert(ay  != nullptr);
-  assert(az  != nullptr);
-  assert(afx != nullptr);
-  assert(afy != nullptr);
-  assert(afz != nullptr);
-  assert(as  != nullptr);
-  assert(ae  != nullptr);
-  assert(aq  != nullptr);
-  for(int i=0;i<nmol;i++){
+  #pragma omp simd
+  for(int i=is[thread];i<ie[thread];i++){
     for(int d=0;d<nsite;d++){
       const int index = nsite*i + d;
       ax[i+d*offset]  = a[index].r[0] - gx[i];
@@ -1155,12 +1184,25 @@ void ForceCalculator::SwitchingTuning(Molecule* m,Atom* a,const MolTypeList mtl,
       afx[index] = afy[index] = afz[index] = ZERO;
     }
   }
+#pragma omp barrier
+  first_call = false;
 #ifdef INSERT_TIMER_FORCE
   prof.end(Profiler::Pre);
 #endif
 
+  const int ivs = (is[thread]/nlane)*nlane;
+  const int ive = (ie[thread]/nlane)*nlane;
+
 #ifdef __INTEL_COMPILER
-  __assume(nlane%(64/sizeof(FP))==0);
+#if defined(__AVX512F__)
+  constexpr int nsimd = 64 / sizeof(FP);
+#elif defined(__AVX2__)
+  constexpr int nsimd = 32 / sizeof(FP);
+#else
+  constexpr int nsimd = 16 / sizeof(FP);
+#endif
+  __assume(nlane%nsimd==0);
+  __assume(ivs%nsimd == 0);
   __assume_aligned(gx,64);
   __assume_aligned(gy,64);
   __assume_aligned(gz,64);
@@ -1183,21 +1225,48 @@ void ForceCalculator::SwitchingTuning(Molecule* m,Atom* a,const MolTypeList mtl,
   __assume_aligned(ae,64);
   __assume_aligned(aq,64);
 #endif
-
 #ifdef INSERT_TIMER_FORCE
   prof.beg(Profiler::Force);
+  prof.beg(Profiler::Head);
 #endif
-  for(int iv=0;iv<(nmol/nlane)*nlane;iv+=nlane){
+  //const int ivs = 0;
+  //const int ive = (nmol/nlane)*nlane;
+  //#pragma omp for
+  for(int iv=ivs;iv<ive;iv+=nlane){
     const int js = jstart[iv/nlane];
     int je = jend[iv/nlane];
     if(js>=je) je += nmol;
+    FP* gx_tmp = gx + iv;
+    FP* gy_tmp = gy + iv;
+    FP* gz_tmp = gz + iv;
+    FP* gfx_tmp = gfx + iv;
+    FP* gfy_tmp = gfy + iv;
+    FP* gfz_tmp = gfz + iv;
+    FP* gvx_tmp = gvx + iv;
+    FP* gvy_tmp = gvy + iv;
+    FP* gvz_tmp = gvz + iv;
+    FP* glj_tmp = glj + iv;
+    FP* gcl_tmp = gcl + iv;
+#ifdef __INTEL_COMPILER
+    __assume_aligned(gx_tmp,64);
+    __assume_aligned(gy_tmp,64);
+    __assume_aligned(gz_tmp,64);
+    __assume_aligned(gfx_tmp,64);
+    __assume_aligned(gfy_tmp,64);
+    __assume_aligned(gfz_tmp,64);
+    __assume_aligned(gvx_tmp,64);
+    __assume_aligned(gvy_tmp,64);
+    __assume_aligned(gvz_tmp,64);
+    __assume_aligned(glj_tmp,64);
+    __assume_aligned(gcl_tmp,64);
+#endif
 #pragma omp simd
     for(int ii=0;ii<nlane;ii++){
       const int i = iv + ii;
 
-      const FP gx_i = gx[i];
-      const FP gy_i = gy[i];
-      const FP gz_i = gz[i];
+      const FP gx_i = gx_tmp[ii];
+      const FP gy_i = gy_tmp[ii];
+      const FP gz_i = gz_tmp[ii];
       FP gfx_i = ZERO;
       FP gfy_i = ZERO;
       FP gfz_i = ZERO;
@@ -1235,18 +1304,23 @@ void ForceCalculator::SwitchingTuning(Molecule* m,Atom* a,const MolTypeList mtl,
 	afy[i+d*offset] = afy_i[d];
 	afz[i+d*offset] = afz_i[d];
       }
-      gfx[i] = gfx_i;
-      gfy[i] = gfy_i;
-      gfz[i] = gfz_i;
-      gvx[i] = gvx_i;
-      gvy[i] = gvy_i;
-      gvz[i] = gvz_i;
-      gcl[i] = gcl_i;
-      glj[i] = glj_i;
+      gfx_tmp[ii] = gfx_i;
+      gfy_tmp[ii] = gfy_i;
+      gfz_tmp[ii] = gfz_i;
+      gvx_tmp[ii] = gvx_i;
+      gvy_tmp[ii] = gvy_i;
+      gvz_tmp[ii] = gvz_i;
+      gcl_tmp[ii] = gcl_i;
+      glj_tmp[ii] = glj_i;
     } // ii loop
   }// iv loop
+#ifdef INSERT_TIMER_FORCE
+  prof.end(Profiler::Head);
+  prof.beg(Profiler::Tail);
+#endif
   // tail loop
-  for(int i=(nmol/nlane)*nlane;i<nmol;i++){
+  if(nmol%nlane != 0){
+  for(int i=ive;i<ie[thread];i++){
     const int js = jstart[i/nlane];
     int je = jend[i/nlane];
     if(js>=je) je += nmol;
@@ -1299,39 +1373,54 @@ void ForceCalculator::SwitchingTuning(Molecule* m,Atom* a,const MolTypeList mtl,
     gcl[i] = gcl_i;
     glj[i] = glj_i;
   }// i loop
+}
 #ifdef INSERT_TIMER_FORCE
+  prof.end(Profiler::Tail);
   prof.end(Profiler::Force);
-#endif
-
-#ifdef INSERT_TIMER_FORCE
+  #pragma omp barrier
   prof.beg(Profiler::Post);
 #endif
-  for(int i=0;i<nmol;i++){
+  #pragma omp simd
+  for(int i=is[thread];i<ie[thread];i++){
     m[i].f[0] = gfx[i];
     m[i].f[1] = gfy[i];
     m[i].f[2] = gfz[i];
   }
-  prop.vir = 0.0;
-  prop.lj = prop.clmb = 0.0;
-  for(int i=0;i<nmol;i++){
-    prop.lj   += glj[i];
-    prop.clmb += gcl[i];
-
-    prop.vir[0] += gvx[i];
-    prop.vir[1] += gvy[i];
-    prop.vir[2] += gvz[i];
-  }
-  prop.lj   *= 0.5;
-  prop.clmb *= 0.5;
-  prop.vir  *= 0.5;
-
-  for(int i=0;i<nmol;i++){
+  #pragma omp simd
+  for(int i=is[thread];i<ie[thread];i++){
     for(int d=0;d<nsite;d++){
       a[nsite*i+d].f[0] = afx[i+d*offset];
       a[nsite*i+d].f[1] = afy[i+d*offset];
       a[nsite*i+d].f[2] = afz[i+d*offset];
     }
   }
+
+  lj_omp[thread] = 0.0;
+  clmb_omp[thread] = 0.0;
+  vir_omp[thread] = 0.0;
+  #pragma omp simd
+  for(int i=is[thread];i<ie[thread];i++){
+    lj_omp[thread]   += glj[i];
+    clmb_omp[thread] += gcl[i];
+
+    vir_omp[thread][0] += gvx[i];
+    vir_omp[thread][1] += gvy[i];
+    vir_omp[thread][2] += gvz[i];
+  }
+  #pragma omp barrier
+  if(thread == 0){
+    prop.vir = 0.0;
+    prop.lj = prop.clmb = 0.0;
+    for(int i=0;i<nthreads;i++){
+      prop.lj   += lj_omp[i];
+      prop.clmb += clmb_omp[i];
+      prop.vir  += vir_omp[i];
+    }
+    prop.lj   *= 0.5;
+    prop.clmb *= 0.5;
+    prop.vir  *= 0.5;
+  }
+
 #ifdef INSERT_TIMER_FORCE
   prof.end(Profiler::Post);
 #endif
@@ -1340,61 +1429,97 @@ void ForceCalculator::SwitchingTuning(Molecule* m,Atom* a,const MolTypeList mtl,
 #undef KERNEL_LJ_CLMB
 #undef KERNEL_CLMB
 
-void ForceCalculator::Switching3site(Molecule *m,Atom *a,const MolTypeList mtl,const dvec3 L,const int nmol,Property& prop,const int* js,const int* je,const int nlane){
-  SwitchingTuning<3>(m,a,mtl,L,nmol,prop,js,je,nlane);
+void ForceCalculator::Switching3site(Molecule *m,Atom *a,const MolTypeList mtl,const dvec3 L,const int nmol,Property& prop,const int* js,const int* je,const int nlane,const int* is,const int* ie){
+  SwitchingTuning<3>(m,a,mtl,L,nmol,prop,js,je,nlane,is,ie);
 }
-void ForceCalculator::Switching4site(Molecule *m,Atom *a,const MolTypeList mtl,const dvec3 L,const int nmol,Property& prop,const int* js,const int* je,const int nlane){
-  SwitchingTuning<4>(m,a,mtl,L,nmol,prop,js,je,nlane);
+void ForceCalculator::Switching4site(Molecule *m,Atom *a,const MolTypeList mtl,const dvec3 L,const int nmol,Property& prop,const int* js,const int* je,const int nlane,const int* is,const int* ie){
+  SwitchingTuning<4>(m,a,mtl,L,nmol,prop,js,je,nlane,is,ie);
 }
-void ForceCalculator::Switching5site(Molecule *m,Atom *a,const MolTypeList mtl,const dvec3 L,const int nmol,Property& prop,const int* js,const int* je,const int nlane){
-  SwitchingTuning<5>(m,a,mtl,L,nmol,prop,js,je,nlane);
+void ForceCalculator::Switching5site(Molecule *m,Atom *a,const MolTypeList mtl,const dvec3 L,const int nmol,Property& prop,const int* js,const int* je,const int nlane,const int* is,const int* ie){
+  SwitchingTuning<5>(m,a,mtl,L,nmol,prop,js,je,nlane,is,ie);
 }
 
 
-void ForceCalculator::Confined(Molecule* m,Atom *a,const MolTypeList mtl,const dvec3 L,const int nmol,Property& prop){
-  const double dr = wall_length / (double)nfwall;
-  int a_count = 0;
-  prop.wall = 0.0;
-  for(int i=0;i<nmol;i++){
-    for(int ii=0;ii<mtl[m[i].type].a.size();ii++){
-      if(a[a_count].t==0){ // only for oxygen
-	if(confined_dim == 1){
-	  dvec3  r_i = a[a_count].r - L*0.5;
-#ifdef TAKAIWA
-	  double r01 = sqrt(r_i[2]*r_i[2] + r_i[1]*r_i[1]);
+void ForceCalculator::Confined(Molecule* m,Atom *a,const MolTypeList mtl,const dvec3 L,const int nmol,Property& prop,const int* is,const int* ie){
+#ifdef _OPENMP
+  const int thread = omp_get_thread_num();
 #else
-	  double r01 = sqrt(r_i[0]*r_i[0] + r_i[1]*r_i[1]);
+  const int thread = 0;
 #endif
-	  int index = (int)(r01/dr);
-	  if(index>=nfwall) index = nfwall -1;
-	  double f = (fwall[index+1][0]-fwall[index][0])/dr*(r01 - dr*index) + fwall[index][0];
-	  double e = (fwall[index+1][1]-fwall[index][1])/dr*(r01 - dr*index) + fwall[index][1];
-#ifdef TAKAIWA
-	  a[a_count].f[2] += f*r_i[2];
-	  a[a_count].f[1] += f*r_i[1];
+#if defined(THREE_SITE) || defined(FOUR_SITE) || defined(FIVE_SITE)
+  const double dr  = wall_length / (double)nfwall;
+  const double dri = 1.0 / dr;
+#ifdef THREE_SITE
+  constexpr int nsite = 3;
+#endif
+#ifdef FOUR_SITE
+  constexpr int nsite = 4;
+#endif
+#ifdef FIVE_SITE
+  constexpr int nsite = 5;
+#endif
+  wall_omp[thread] = 0.0;
+  if(confined_dim == 1){
+    for(int i=is[thread];i<ie[thread];i++){
+      const int ai = nsite * i;
+      dvec3  r_i = a[ai].r - L*0.5;
+      double r01 = sqrt(r_i[0]*r_i[0] + r_i[1]*r_i[1]);
+      int index = (int)(r01/dr);
+      assert(index < nfwall);
+      double f = (fwall[index+1][0]-fwall[index][0])*dri*(r01 - dr*index) + fwall[index][0];
+      double e = (fwall[index+1][1]-fwall[index][1])*dri*(r01 - dr*index) + fwall[index][1];
+      a[ai].f[0] += f*r_i[0];
+      a[ai].f[1] += f*r_i[1];
 #ifdef SWITCHING
-	  m[i].f[2] += f*r_i[2];
-	  m[i].f[1] += f*r_i[1];
+      m[i].f[0] += f*r_i[0];
+      m[i].f[1] += f*r_i[1];
 #endif
-#else
-	  a[a_count].f[0] += f*r_i[0];
-	  a[a_count].f[1] += f*r_i[1];
-#ifdef SWITCHING
-	  m[i].f[0] += f*r_i[0];
-	  m[i].f[1] += f*r_i[1];
-#endif
-#endif
-	  a[a_count].e    += e;
-	  prop.wall += e;
-	}else if(confined_dim == 2){
-	  int index = abs((int)( (a[a_count].r[2] - 0.5*L[2]) / dr));
-	  if(index>=nfwall) index = nfwall -1;
-	  a[a_count].f[2] += ((fwall[index+1][0]-fwall[index][0])/dr*(a[a_count].r[2] - dr*index) + fwall[index][0])*a[i].r[2];
-	  a[a_count].e    += (fwall[index+1][1]-fwall[index][1])/dr*(a[a_count].r[2] - dr*index) + fwall[index][1];
-	}
-      }
-      a_count++;
+      a[ai].e    += e;
+      wall_omp[thread] += e;
     }
   }
+  else if(confined_dim == 2) assert(false);
+  #pragma omp barrier
+
+  if(thread == 0){
+    prop.wall = 0.0;
+    for(int i=0;i<nthreads;i++) prop.wall += wall_omp[i];
+  }
+#else
+  #pragma omp single
+  {
+    const double dr = wall_length / (double)nfwall;
+    int a_count = 0;
+    prop.wall = 0.0;
+    for(int i=0;i<nmol;i++){
+      for(int ii=0;ii<mtl[m[i].type].a.size();ii++){
+	if(a[a_count].t==0){ // only for oxygen
+	  if(confined_dim == 1){
+	    dvec3  r_i = a[a_count].r - L*0.5;
+	    double r01 = sqrt(r_i[0]*r_i[0] + r_i[1]*r_i[1]);
+	    int index = (int)(r01/dr);
+	    if(index>=nfwall) index = nfwall -1;
+	    double f = (fwall[index+1][0]-fwall[index][0])/dr*(r01 - dr*index) + fwall[index][0];
+	    double e = (fwall[index+1][1]-fwall[index][1])/dr*(r01 - dr*index) + fwall[index][1];
+	    a[a_count].f[0] += f*r_i[0];
+	    a[a_count].f[1] += f*r_i[1];
+#ifdef SWITCHING
+	    m[i].f[0] += f*r_i[0];
+	    m[i].f[1] += f*r_i[1];
+#endif
+	    a[a_count].e    += e;
+	    prop.wall += e;
+	  }else if(confined_dim == 2){
+	    int index = abs((int)( (a[a_count].r[2] - 0.5*L[2]) / dr));
+	    if(index>=nfwall) index = nfwall -1;
+	    a[a_count].f[2] += ((fwall[index+1][0]-fwall[index][0])/dr*(a[a_count].r[2] - dr*index) + fwall[index][0])*a[i].r[2];
+	    a[a_count].e    += (fwall[index+1][1]-fwall[index][1])/dr*(a[a_count].r[2] - dr*index) + fwall[index][1];
+	  }
+	}
+	a_count++;
+      }
+    }
+  }
+#endif
 }
 
