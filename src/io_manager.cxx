@@ -602,10 +602,10 @@ void IOManager::WriteCheckPoint
   //std::ostream *is;
   //s = new std::iostream(std::cout.rdbuf());
   //s = new std::ofstream(filename.c_str(),std::ios_base::out);
-  fprintf(stdout,"WriteCheckPoint\n");
+  //fprintf(stdout,"WriteCheckPoint\n");
   std::stringstream filename;
   filename << iprm->ochk << std::setw(4) << std::setfill('0') << index << ".chk";
-  std::cout << filename.str() << std::endl;
+  //std::cout << filename.str() << std::endl;
   std::ostream *ofs;
   ofs = new std::ofstream(filename.str(),std::ios_base::out);
 
