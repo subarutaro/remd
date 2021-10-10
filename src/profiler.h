@@ -13,13 +13,15 @@ constexpr int NTHREAD_MAX = 1;
 
 class Profiler{
  public:
-  enum {
-    D1 = 0,
+  enum { 
+    Integ = 0,
+    D1,
     D2,
     D3,
     D4,
     D5,
     D6,
+    PsPv,
     CalcForce,
     Sort,
     Neigh,
@@ -42,12 +44,14 @@ class Profiler{
     NumProf
   };
   char name[256][NumProf] = {
-    "D1    ",
-    "D2    ",
-    "D3    ",
-    "D4    ",
-    "D5    ",
-    "D6    ",
+    "Integ ",
+    "  D1    ",
+    "  D2    ",
+    "  D3    ",
+    "  D4    ",
+    "  D5    ",
+    "  D6    ",
+    "  PsPv  ",
     "Force ",
     "  Sort     ",
     "  Neigh    ",
