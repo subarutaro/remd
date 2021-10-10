@@ -23,18 +23,16 @@ CFLAGS += -DSWITCHING
 CFLAGS += -DFOUR_SITE
 CFLAGS += -DINSERT_TIMER_FORCE
 CFLAGS += -DUSE_FP32
+CFLAGS += -DENABLE_AOS_TO_SOA_CONVERSION
+#CFLAGS += -DENABLE_MPI
 
-CFLAGS += -DENABLE_MPI
-
-#OMPFLAGS += -fopenmp
 OMPFLAGS += -qopenmp
-#CFLAGS +=  -lpthread -lgomp -lcudart
 
-#CXXFLAGS = -std=c++17
 CXXFLAGS = -std=c++17
 CXXFLAGS += -g
 
 CXXFLAGS += -xAVX2
+#CXXFLAGS += -xCOMMON-AVX512 -qopt-zmm-usage=high
 CXXFLAGS += -use-fast-math
 CXXFLAGS += -qopt-report=5
 
