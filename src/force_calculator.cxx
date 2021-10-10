@@ -36,17 +36,15 @@ ForceCalculator::ForceCalculator
     CalcWallForce();
   }
 #ifdef _OPENMP
-  #pragma omp parallel
-  {
-    nthreads  = omp_get_num_threads();
-  }
+  nthreads  = omp_get_max_threads();
+  std::cout << "nthreads in ForceCalculator: " << nthreads << std::endl;
 #else
   nthreads  = 1;
 #endif
-  lj_omp   = new FP[nthreads];
-  clmb_omp = new FP[nthreads];
-  vir_omp  = new FPvec[nthreads];
-  wall_omp = new FP[nthreads];
+  lj_omp   = new    FP[16*nthreads];
+  clmb_omp = new    FP[16*nthreads];
+  vir_omp  = new FPvec[16*nthreads];
+  wall_omp = new    FP[16*nthreads];
   SetKvec();
 }
 
@@ -1193,7 +1191,7 @@ void ForceCalculator::SwitchingTuning(Molecule* m,Atom* a,const MolTypeList mtl,
   const int ivs = (is[thread]/nlane)*nlane;
   const int ive = (ie[thread]/nlane)*nlane;
 
-#ifdef __INTEL_COMPILER
+#if 0 //def __INTEL_COMPILER
 #if defined(__AVX512F__)
   constexpr int nsimd = 64 / sizeof(FP);
 #elif defined(__AVX2__)
@@ -1247,7 +1245,7 @@ void ForceCalculator::SwitchingTuning(Molecule* m,Atom* a,const MolTypeList mtl,
     FP* gvz_tmp = gvz + iv;
     FP* glj_tmp = glj + iv;
     FP* gcl_tmp = gcl + iv;
-#ifdef __INTEL_COMPILER
+#if 0 //def __INTEL_COMPILER
     __assume_aligned(gx_tmp,64);
     __assume_aligned(gy_tmp,64);
     __assume_aligned(gz_tmp,64);
@@ -1319,93 +1317,137 @@ void ForceCalculator::SwitchingTuning(Molecule* m,Atom* a,const MolTypeList mtl,
   prof.beg(Profiler::Tail);
 #endif
   // tail loop
-  if(nmol%nlane != 0){
-  for(int i=ive;i<ie[thread];i++){
-    const int js = jstart[i/nlane];
-    int je = jend[i/nlane];
-    if(js>=je) je += nmol;
+  if(thread == nthreads-1){
+    for(int i=ive;i<ie[thread];i++){
+      const int js = jstart[i/nlane];
+      int je = jend[i/nlane];
+      if(js>=je) je += nmol;
 
-    const FP gx_i = gx[i];
-    const FP gy_i = gy[i];
-    const FP gz_i = gz[i];
-    FP gfx_i = ZERO;
-    FP gfy_i = ZERO;
-    FP gfz_i = ZERO;
-    FP gvx_i = ZERO;
-    FP gvy_i = ZERO;
-    FP gvz_i = ZERO;
-    FP glj_i = ZERO;
-    FP gcl_i = ZERO;
+      const FP gx_i = gx[i];
+      const FP gy_i = gy[i];
+      const FP gz_i = gz[i];
+      FP gfx_i = ZERO;
+      FP gfy_i = ZERO;
+      FP gfz_i = ZERO;
+      FP gvx_i = ZERO;
+      FP gvy_i = ZERO;
+      FP gvz_i = ZERO;
+      FP glj_i = ZERO;
+      FP gcl_i = ZERO;
 
-    FP ax_i[nsite];
-    FP ay_i[nsite];
-    FP az_i[nsite];
-    FP q_i[nsite];
-    FP e_i[nsite];
-    FP s_i[nsite];
-    FP afx_i[nsite];
-    FP afy_i[nsite];
-    FP afz_i[nsite];
-    for(int d=0;d<nsite;d++){
-      ax_i[d] = ax[i + d*offset];
-      ay_i[d] = ay[i + d*offset];
-      az_i[d] = az[i + d*offset];
-      q_i[d] =  aq[i + d*offset];
-      e_i[d] =  ae[i + d*offset];
-      s_i[d] =  as[i + d*offset];
-      afx_i[d] = afy_i[d] = afz_i[d] = ZERO;
-    }
-    for(int jj=js; jj<=je; jj++){
-      const int j = jj%nmol;
-      INNER_MOST_LOOP;
-    }// j loop
-    for(int d=0;d<nsite;d++){
-      afx[i+d*offset] = afx_i[d];
-      afy[i+d*offset] = afy_i[d];
-      afz[i+d*offset] = afz_i[d];
-    }
-    gfx[i] = gfx_i;
-    gfy[i] = gfy_i;
-    gfz[i] = gfz_i;
-    gvx[i] = gvx_i;
-    gvy[i] = gvy_i;
-    gvz[i] = gvz_i;
-    gcl[i] = gcl_i;
-    glj[i] = glj_i;
-  }// i loop
-}
+      FP ax_i[nsite];
+      FP ay_i[nsite];
+      FP az_i[nsite];
+      FP q_i[nsite];
+      FP e_i[nsite];
+      FP s_i[nsite];
+      FP afx_i[nsite];
+      FP afy_i[nsite];
+      FP afz_i[nsite];
+      for(int d=0;d<nsite;d++){
+	ax_i[d] = ax[i + d*offset];
+	ay_i[d] = ay[i + d*offset];
+	az_i[d] = az[i + d*offset];
+	q_i[d] =  aq[i + d*offset];
+	e_i[d] =  ae[i + d*offset];
+	s_i[d] =  as[i + d*offset];
+	afx_i[d] = afy_i[d] = afz_i[d] = ZERO;
+      }
+      for(int jj=js; jj<=je; jj++){
+	const int j = jj%nmol;
+	INNER_MOST_LOOP;
+      }// j loop
+      for(int d=0;d<nsite;d++){
+	afx[i+d*offset] = afx_i[d];
+	afy[i+d*offset] = afy_i[d];
+	afz[i+d*offset] = afz_i[d];
+      }
+      gfx[i] = gfx_i;
+      gfy[i] = gfy_i;
+      gfz[i] = gfz_i;
+      gvx[i] = gvx_i;
+      gvy[i] = gvy_i;
+      gvz[i] = gvz_i;
+      gcl[i] = gcl_i;
+      glj[i] = glj_i;
+    }// i loop
+  }
 #ifdef INSERT_TIMER_FORCE
   prof.end(Profiler::Tail);
   prof.end(Profiler::Force);
   #pragma omp barrier
   prof.beg(Profiler::Post);
 #endif
-  #pragma omp simd
-  for(int i=is[thread];i<ie[thread];i++){
-    m[i].f[0] = gfx[i];
-    m[i].f[1] = gfy[i];
-    m[i].f[2] = gfz[i];
-  }
-  #pragma omp simd
-  for(int i=is[thread];i<ie[thread];i++){
-    for(int d=0;d<nsite;d++){
-      a[nsite*i+d].f[0] = afx[i+d*offset];
-      a[nsite*i+d].f[1] = afy[i+d*offset];
-      a[nsite*i+d].f[2] = afz[i+d*offset];
+
+  for(int iv=ivs;iv<ive;iv+=nlane){
+    #pragma omp simd
+    for(int ii=0;ii<nlane;ii++){
+      const int i = iv + ii;
+      m[i].f[0] = gfx[i];
+      m[i].f[1] = gfy[i];
+      m[i].f[2] = gfz[i];
     }
   }
+  if(thread==nthreads-1){
+    for(int i=ive;i<ie[thread];i++){
+      m[i].f[0] = gfx[i];
+      m[i].f[1] = gfy[i];
+      m[i].f[2] = gfz[i];
+    }
+  }
+  for(int iv=ivs;iv<ive;iv+=nlane){
+    #pragma omp simd
+    for(int ii=0;ii<nlane;ii++){
+      const int i = iv + ii;
+      for(int d=0;d<nsite;d++){
+	a[nsite*i+d].f[0] = afx[i+d*offset];
+	a[nsite*i+d].f[1] = afy[i+d*offset];
+	a[nsite*i+d].f[2] = afz[i+d*offset];
+      }
+    }
+  }
+  if(thread==nthreads-1){
+    for(int i=ive;i<ie[thread];i++){
+      for(int d=0;d<nsite;d++){
+	a[nsite*i+d].f[0] = afx[i+d*offset];
+	a[nsite*i+d].f[1] = afy[i+d*offset];
+	a[nsite*i+d].f[2] = afz[i+d*offset];
+      }
+    }
+  }
+  for(int i=0;i<nlane;i++){
+    lj_omp  [nlane*thread+i] = 0.0;
+    clmb_omp[nlane*thread+i] = 0.0;
+    vir_omp [nlane*thread+i] = 0.0;
+  }
+  for(int iv=ivs;iv<ive;iv+=nlane){
+    #pragma omp simd
+    for(int ii=0;ii<nlane;ii++){
+      const int i = iv + ii;
+      lj_omp  [nlane*thread+ii] += glj[i];
+      clmb_omp[nlane*thread+ii] += gcl[i];
 
-  lj_omp[thread] = 0.0;
-  clmb_omp[thread] = 0.0;
-  vir_omp[thread] = 0.0;
-  //#pragma omp simd
-  for(int i=is[thread];i<ie[thread];i++){
-    lj_omp[thread]   += glj[i];
-    clmb_omp[thread] += gcl[i];
+      vir_omp[nlane*thread+ii][0] += gvx[i];
+      vir_omp[nlane*thread+ii][1] += gvy[i];
+      vir_omp[nlane*thread+ii][2] += gvz[i];
+    }
+  }
+  if(thread == nthreads-1){
+    for(int i=ive;i<ie[thread];i++){
+      lj_omp  [nlane*thread] += glj[i];
+      clmb_omp[nlane*thread] += gcl[i];
+      vir_omp [nlane*thread][0] += gvx[i];
+      vir_omp [nlane*thread][1] += gvy[i];
+      vir_omp [nlane*thread][2] += gvz[i];
+    }
+  }
+  for(int i=1;i<nlane;i++){
+    lj_omp  [nlane*thread] += lj_omp  [nlane*thread+i];
+    clmb_omp[nlane*thread] += clmb_omp[nlane*thread+i];
 
-    vir_omp[thread][0] += gvx[i];
-    vir_omp[thread][1] += gvy[i];
-    vir_omp[thread][2] += gvz[i];
+    vir_omp[nlane*thread][0] += vir_omp[nlane*thread+i][0];
+    vir_omp[nlane*thread][1] += vir_omp[nlane*thread+i][1];
+    vir_omp[nlane*thread][2] += vir_omp[nlane*thread+i][2];
   }
   #pragma omp barrier
   if(thread == 0){
@@ -1413,9 +1455,9 @@ void ForceCalculator::SwitchingTuning(Molecule* m,Atom* a,const MolTypeList mtl,
     prop.lj = prop.clmb = 0.0;
     for(int i=0;i<nthreads;i++){
       //std::cout << i << " " << is[thread] << " " << ie[thread] << " " << lj_omp[i] << " " << clmb_omp[i] << std::endl;
-      prop.lj   += lj_omp[i];
-      prop.clmb += clmb_omp[i];
-      prop.vir  += vir_omp[i];
+      prop.lj   += lj_omp  [nlane*i];
+      prop.clmb += clmb_omp[nlane*i];
+      prop.vir  += vir_omp [nlane*i];
     }
     prop.lj   *= 0.5;
     prop.clmb *= 0.5;

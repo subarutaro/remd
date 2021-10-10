@@ -184,8 +184,53 @@ inline void Molecules::D1(){
   const double coef_xi = 0.25*si;
   //const double coef_tra = si*si*0.5;
   //double sum_tra = 0.0;
-  //#pragma omp simd
-  for(int i=is[thread];i<ie[thread];i++){
+  const int ivs = is[thread];
+  const int ive = is[thread] + ((ie[thread] - is[thread])/nlane)*nlane;
+  dvec3*  sum_Pv = &sum_Pv_omp[nlane*thread];
+  double* sum_Ps = &sum_Ps_omp[nlane*thread];
+  for(int iv=ivs;iv<ive;iv+=nlane){
+    #pragma omp simd
+    for(int ii=0;ii<nlane;ii++){
+      const int i = iv + ii;
+      //update coordinate
+      //update coordinate
+      rx[i] += vx[i]*coef_r[0];
+      ry[i] += vy[i]*coef_r[1];
+      rz[i] += vz[i]*coef_r[2];
+      if(rx[i] <  0.0) rx[i] += 1.0;
+      if(rx[i] >= 1.0) rx[i] -= 1.0;
+      if(ry[i] <  0.0) ry[i] += 1.0;
+      if(ry[i] >= 1.0) ry[i] -= 1.0;
+      if(rz[i] <  0.0) rz[i] += 1.0;
+      if(rz[i] >= 1.0) rz[i] -= 1.0;
+      dvec4  Pq; Pq[0] = -qy[i]; Pq[1] = qx[i]; Pq[2] = qw[i]; Pq[3] = -qz[i];
+      dvec4  Pp; Pp[0] = -py[i]; Pp[1] = px[i]; Pp[2] = pw[i]; Pp[3] = -pz[i];
+      const double xi = (px[i]*Pq[0] + py[i]*Pq[1] + pz[i]*Pq[2] + pw[i]*Pq[3])  * coef_xi/ix[i];
+      const double xidt = xi*dt;
+      const double cosxidt = cos(xidt);
+      const double sinxidt = sin(xidt);
+      qx[i] = qx[i]*cosxidt + Pq[0]*sinxidt;
+      qy[i] = qy[i]*cosxidt + Pq[1]*sinxidt;
+      qz[i] = qz[i]*cosxidt + Pq[2]*sinxidt;
+      qw[i] = qw[i]*cosxidt + Pq[3]*sinxidt;
+      px[i] = px[i]*cosxidt + Pp[0]*sinxidt;
+      py[i] = py[i]*cosxidt + Pp[1]*sinxidt;
+      pz[i] = pz[i]*cosxidt + Pp[2]*sinxidt;
+      pw[i] = pw[i]*cosxidt + Pp[3]*sinxidt;
+
+      if constexpr (((MODE>>PSHIFT)&MASK)>0 || ((MODE>>TSHIFT)&MASK)==T_CONSTANT ){
+	//sum_Pv += m.v*m.v*Li*Li*m.m;
+	const double m = 1.0 / mi[i];
+	sum_Pv[ii][0] += 2.0 * m * vx[i]*vx[i];
+	sum_Pv[ii][1] += 2.0 * m * vy[i]*vy[i];
+	sum_Pv[ii][2] += 2.0 * m * vz[i]*vz[i];
+      }
+      if constexpr (((MODE>>TSHIFT)&MASK)==T_CONSTANT){
+	sum_Ps[ii] += xi*xi*ix[i];
+      }
+    }
+  }
+  for(int i=ive;i<ie[thread];i++){
     //update coordinate
     //update coordinate
     rx[i] += vx[i]*coef_r[0];
@@ -236,8 +281,36 @@ inline void Molecules::D2(){
 #endif
 
   const double coef_xi = 0.25 / tst->s;
-  //#pragma omp simd // make slower
-  for(int i=is[thread];i<ie[thread];i++){
+
+  const int ivs = is[thread];
+  const int ive = is[thread] + ((ie[thread] - is[thread])/nlane)*nlane;
+  double* sum_Ps = &sum_Ps_omp[nlane*thread];
+  for(int iv=ivs;iv<ive;iv+=nlane){
+    #pragma omp simd
+    for(int ii=0;ii<nlane;ii++){
+      const int i = iv + ii;
+      dvec4  Pq; Pq[0] = -qz[i]; Pq[1] = -qw[i]; Pq[2] = qx[i]; Pq[3] = qy[i];
+      dvec4  Pp; Pp[0] = -pz[i]; Pp[1] = -pw[i]; Pp[2] = px[i]; Pp[3] = py[i];
+      const double xi = (px[i]*Pq[0] + py[i]*Pq[1] + pz[i]*Pq[2] + pw[i]*Pq[3])*coef_xi/iy[i];
+      const double xidt = xi*dthalf;
+      const double cosxidt = cos(xidt);
+      const double sinxidt = sin(xidt);
+      qx[i] = qx[i]*cosxidt + Pq[0]*sinxidt;
+      qy[i] = qy[i]*cosxidt + Pq[1]*sinxidt;
+      qz[i] = qz[i]*cosxidt + Pq[2]*sinxidt;
+      qw[i] = qw[i]*cosxidt + Pq[3]*sinxidt;
+
+      px[i] = px[i]*cosxidt + Pp[0]*sinxidt;
+      py[i] = py[i]*cosxidt + Pp[1]*sinxidt;
+      pz[i] = pz[i]*cosxidt + Pp[2]*sinxidt;
+      pw[i] = pw[i]*cosxidt + Pp[3]*sinxidt;
+
+      if(((MODE>>TSHIFT)&MASK)==T_CONSTANT){
+	sum_Ps_omp[nlane*thread+ii] += 0.5*xi*xi*iy[i];
+      }
+    }
+  }
+  for(int i=ive;i<ie[thread];i++){
     dvec4  Pq; Pq[0] = -qz[i]; Pq[1] = -qw[i]; Pq[2] = qx[i]; Pq[3] = qy[i];
     dvec4  Pp; Pp[0] = -pz[i]; Pp[1] = -pw[i]; Pp[2] = px[i]; Pp[3] = py[i];
     const double xi = (px[i]*Pq[0] + py[i]*Pq[1] + pz[i]*Pq[2] + pw[i]*Pq[3])*coef_xi/iy[i];
@@ -270,7 +343,35 @@ inline void Molecules::D3(){
 #endif
   const double coef_xi = 0.25 / tst->s;
   //#pragma omp simd // make slower
-  for(int i=is[thread];i<ie[thread];i++){
+  const int ivs = is[thread];
+  const int ive = is[thread] + ((ie[thread] - is[thread])/nlane)*nlane;
+  double* sum_Ps = &sum_Ps_omp[nlane*thread];
+  for(int iv=ivs;iv<ive;iv+=nlane){
+    #pragma omp simd
+    for(int ii=0;ii<nlane;ii++){
+      const int i = iv + ii;
+
+      dvec4  Pq; Pq[0] = -qw[i]; Pq[1] = qz[i]; Pq[2] = -qy[i]; Pq[3] = qx[i];
+      dvec4  Pp; Pp[0] = -pw[i]; Pp[1] = pz[i]; Pp[2] = -py[i]; Pp[3] = px[i];
+      const double xi = (px[i]*Pq[0] + py[i]*Pq[1] + pz[i]*Pq[2] + pw[i]*Pq[3])*coef_xi/iz[i];
+      const double xidt = xi*dthalf;
+      const double cosxidt = cos(xidt);
+      const double sinxidt = sin(xidt);
+      qx[i] = qx[i]*cosxidt + Pq[0]*sinxidt;
+      qy[i] = qy[i]*cosxidt + Pq[1]*sinxidt;
+      qz[i] = qz[i]*cosxidt + Pq[2]*sinxidt;
+      qw[i] = qw[i]*cosxidt + Pq[3]*sinxidt;
+
+      px[i] = px[i]*cosxidt + Pp[0]*sinxidt;
+      py[i] = py[i]*cosxidt + Pp[1]*sinxidt;
+      pz[i] = pz[i]*cosxidt + Pp[2]*sinxidt;
+      pw[i] = pw[i]*cosxidt + Pp[3]*sinxidt;
+      if(((MODE>>TSHIFT)&MASK)==T_CONSTANT){
+	sum_Ps_omp[nlane*thread+ii] += 0.5*xi*xi*iz[i];
+      }
+    }
+  }
+  for(int i=ive;i<ie[thread];i++){
     dvec4  Pq; Pq[0] = -qw[i]; Pq[1] = qz[i]; Pq[2] = -qy[i]; Pq[3] = qx[i];
     dvec4  Pp; Pp[0] = -pw[i]; Pp[1] = pz[i]; Pp[2] = -py[i]; Pp[3] = px[i];
     const double xi = (px[i]*Pq[0] + py[i]*Pq[1] + pz[i]*Pq[2] + pw[i]*Pq[3])*coef_xi/iz[i];
@@ -304,7 +405,28 @@ inline void Molecules::D5(){
   const dvec3  coef_v = L * tst->s * dthalf;
   const double coef_p = 2.0 * tst->s * dthalf;
 
-  for(int i=is[thread];i<ie[thread];i++){
+  const int ivs = is[thread];
+  const int ive = is[thread] + ((ie[thread] - is[thread])/nlane)*nlane;
+  double* sum_Ps = &sum_Ps_omp[nlane*thread];
+  for(int iv=ivs;iv<ive;iv+=nlane){
+    #pragma omp simd
+    for(int ii=0;ii<nlane;ii++){
+      const int i = iv + ii;
+
+      vx[i] += fx[i] * coef_v[0] * mi[i];
+      vy[i] += fy[i] * coef_v[1] * mi[i];
+      vz[i] += fz[i] * coef_v[2] * mi[i];
+      dvec4 S0; S0[0] = qx[i]; S0[1] = -qy[i]; S0[2] = -qz[i]; S0[3] = -qw[i];
+      dvec4 S1; S1[0] = qy[i]; S1[1] =  qx[i]; S1[2] = -qw[i]; S1[3] =  qz[i];
+      dvec4 S2; S2[0] = qz[i]; S2[1] =  qw[i]; S2[2] =  qx[i]; S2[3] = -qy[i];
+      dvec4 S3; S3[0] = qw[i]; S3[1] = -qz[i]; S3[2] =  qy[i]; S3[3] =  qx[i];
+      px[i] += (S0[0]*nx[i] + S0[1]*ny[i] + S0[2]*nz[i] + S0[3]*nw[i])*coef_p;
+      py[i] += (S1[0]*nx[i] + S1[1]*ny[i] + S1[2]*nz[i] + S1[3]*nw[i])*coef_p;
+      pz[i] += (S2[0]*nx[i] + S2[1]*ny[i] + S2[2]*nz[i] + S2[3]*nw[i])*coef_p;
+      pw[i] += (S3[0]*nx[i] + S3[1]*ny[i] + S3[2]*nz[i] + S3[3]*nw[i])*coef_p;
+    }
+  }
+  for(int i=ive;i<ie[thread];i++){
     vx[i] += fx[i] * coef_v[0] * mi[i];
     vy[i] += fy[i] * coef_v[1] * mi[i];
     vz[i] += fz[i] * coef_v[2] * mi[i];
@@ -522,6 +644,7 @@ void Molecules::D6(){
 template<int MODE>
 void Molecules::ExecuteStep(){
     prof.beg(Profiler::Total);
+    prof.beg(Profiler::Integ);
     prof.beg(Profiler::D6);
     D6<MODE>();
     prof.end(Profiler::D6);
@@ -531,7 +654,9 @@ void Molecules::ExecuteStep(){
     prof.beg(Profiler::D4);
     D4<MODE>();
     prof.end(Profiler::D4);
+    prof.beg(Profiler::PsPv);
     init_D3D2D1D2D3_PsPv<MODE>();
+    prof.end(Profiler::PsPv);
     prof.beg(Profiler::D3);
     D3<MODE>();
     prof.end(Profiler::D3);
@@ -547,10 +672,13 @@ void Molecules::ExecuteStep(){
     prof.beg(Profiler::D3);
     D3<MODE>();
     prof.end(Profiler::D3);
+    prof.beg(Profiler::PsPv);
     D3D2D1D2D3_PsPv<MODE>();
+    prof.end(Profiler::PsPv);
     prof.beg(Profiler::D4);
     D4<MODE>();
     prof.end(Profiler::D4);
+    prof.end(Profiler::Integ);
 #ifdef ENABLE_AOS_TO_SOA_CONVERSION
     prof.beg(Profiler::SoAtoAoS);
     SoAtoAoS();
@@ -564,12 +692,14 @@ void Molecules::ExecuteStep(){
     AoStoSoA();
     prof.end(Profiler::AoStoSoA);
 #endif
+    prof.beg(Profiler::Integ);
     prof.beg(Profiler::D5);
     D5<MODE>();
     prof.end(Profiler::D5);
     prof.beg(Profiler::D6);
     D6<MODE>();
     prof.end(Profiler::D6);
+    prof.end(Profiler::Integ);
     prof.end(Profiler::Total);
 }
 
