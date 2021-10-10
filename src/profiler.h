@@ -34,6 +34,10 @@ class Profiler{
 #endif
     Wall,
     A2M,
+#ifdef ENABLE_AOS_TO_SOA_CONVERSION
+    AoStoSoA,
+    SoAtoAoS,
+#endif
     Total,
     NumProf
   };
@@ -45,19 +49,23 @@ class Profiler{
     "D5    ",
     "D6    ",
     "Force ",
-    "  Sort  ",
-    "  Neigh ",
-    "  M2A   ",
-    "  Nb    ",
+    "  Sort     ",
+    "  Neigh    ",
+    "  M2A      ",
+    "  Nb       ",
 #ifdef INSERT_TIMER_FORCE
-    "    Pre  ",
-    "    Force ",
-    "      Head ",
-    "      Tail ",
-    "    Post  ",
+    "    Pre      ",
+    "    Force    ",
+    "      Head   ",
+    "      Tail   ",
+    "    Post   ",
 #endif
-    "  Wall  ",
-    "  A2M   ",
+    "  Wall     ",
+    "  A2M      ",
+#ifdef ENABLE_AOS_TO_SOA_CONVERSION
+    "  AoStoSoA ",
+    "  SoAtoAoS ",
+#endif
     "Total  "
   };
 
