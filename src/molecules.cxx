@@ -492,7 +492,11 @@ inline void parallel_sort(T* m,const int n,Compare c){
 
 template <class T,class Compare>
 void parallel_sort_body(T* m,const int left,const int right,Compare c,const int threshold = 32){
+#ifdef _OPENMP
   const int tid = omp_get_thread_num();
+#else
+  const int tid = 0;
+#endif
   //printf("%d: %llu, %d %d\n",tid,m,left,right);
   fflush(stdout);
 
@@ -525,6 +529,15 @@ void parallel_sort_body(T* m,const int left,const int right,Compare c,const int 
 }
 
 void Molecules::CalcForcePot(){
+#if 0//def ENABLE_AOS_TO_SOA_CONVERSION
+  prof.beg(Profiler::SoAtoAoS);
+#pragma omp single
+  {
+    SoAtoAoS();
+  }
+  prof.beg(Profiler::SoAtoAoS);
+#endif
+
 #ifdef SWITCHING
 #if defined(FOUR_SITE) || defined(THREE_SITE) || defined(FIVE_SITE)
   prof.beg(Profiler::Sort);
@@ -604,6 +617,15 @@ void Molecules::CalcForcePot(){
   ConvertFromAtoms();
   prof.end(Profiler::A2M);
   //printf("A2M finished\n");
+
+#if 0//def ENABLE_AOS_TO_SOA_CONVERSION
+  prof.beg(Profiler::AoStoSoA);
+  #pragma omp single
+  {
+    AoStoSoA();
+  }
+  prof.end(Profiler::AoStoSoA);
+#endif
 }
 
 dvec3 Molecules::TranslationalEnergy(){

@@ -1398,7 +1398,7 @@ void ForceCalculator::SwitchingTuning(Molecule* m,Atom* a,const MolTypeList mtl,
   lj_omp[thread] = 0.0;
   clmb_omp[thread] = 0.0;
   vir_omp[thread] = 0.0;
-  #pragma omp simd
+  //#pragma omp simd
   for(int i=is[thread];i<ie[thread];i++){
     lj_omp[thread]   += glj[i];
     clmb_omp[thread] += gcl[i];
@@ -1412,6 +1412,7 @@ void ForceCalculator::SwitchingTuning(Molecule* m,Atom* a,const MolTypeList mtl,
     prop.vir = 0.0;
     prop.lj = prop.clmb = 0.0;
     for(int i=0;i<nthreads;i++){
+      //std::cout << i << " " << is[thread] << " " << ie[thread] << " " << lj_omp[i] << " " << clmb_omp[i] << std::endl;
       prop.lj   += lj_omp[i];
       prop.clmb += clmb_omp[i];
       prop.vir  += vir_omp[i];
