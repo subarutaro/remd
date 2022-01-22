@@ -528,7 +528,7 @@ void parallel_sort_body(T* m,const int left,const int right,Compare c,const int 
   #pragma omp taskwait
 }
 
-void Molecules::CalcForcePot(){
+void Molecules::CalcForcePot(const bool doSort,const double mergin){
 #if 0//def ENABLE_AOS_TO_SOA_CONVERSION
   prof.beg(Profiler::SoAtoAoS);
 #pragma omp single
@@ -542,12 +542,12 @@ void Molecules::CalcForcePot(){
 #if defined(FOUR_SITE) || defined(THREE_SITE) || defined(FIVE_SITE)
   prof.beg(Profiler::Sort);
 #pragma omp single
-  {
+  if(doSort){
     std::sort(mlcl,mlcl+nmol,compare);
   } // omp single
   prof.end(Profiler::Sort);
   prof.beg(Profiler::Neigh);
-  {
+  if(doSort){
 #ifdef _OPENMP
     const int thread = omp_get_thread_num();
 #else
@@ -557,7 +557,7 @@ void Molecules::CalcForcePot(){
     const int ive = (ie[thread] == nmol) ? ((nmol+nlane-1)/nlane)*nlane : (ie[thread]/nlane)*nlane;
     for(int i=ivs;i<ive;i+=nlane){
       int s = i;
-      double lb = mlcl[s].r[2] - fclcltr->rcut/L[2];
+      double lb = mlcl[s].r[2] - (fclcltr->rcut + mergin)/L[2];
       while(mlcl[s].r[2] >= lb){
 	s--;
 	if(s<0){
@@ -568,7 +568,7 @@ void Molecules::CalcForcePot(){
       jstart[i/nlane] = s;
 
       int e = std::min(i+nlane-1,nmol-1);
-      double ub = mlcl[e].r[2] + fclcltr->rcut/L[2];
+      double ub = mlcl[e].r[2] + (fclcltr->rcut + mergin)/L[2];
       while(mlcl[e].r[2] <= ub){
 	e++;
 	if(e>=nmol){

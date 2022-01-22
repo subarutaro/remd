@@ -287,7 +287,7 @@ class Molecules{
   void ConvertToAtoms();
   void ConvertFromAtoms();
 
-  void CalcForcePot();
+  void CalcForcePot(const bool doSort = true,const double mergin = 0.0);
 #ifdef ENABLE_AOS_TO_SOA_CONVERSION
   void AoStoSoA();
   void SoAtoAoS();
@@ -301,8 +301,8 @@ class Molecules{
   template <int> void D5();
   template <int> void D6();
   template<int MODE>
-  void ExecuteStep();
-  void ExecuteSteps();
+  void ExecuteStep(const bool,const double);
+  void ExecuteSteps(const int sort_interval = 10,const double mergin = 0.5);
 
   dvec3  TranslationalEnergy();
   double RotationalEnergy();

@@ -105,6 +105,20 @@ struct Molecule{
     m = 0.0;
     type = 0;
   }
+#if 0
+  Molecule(const Molecule& m){
+    this->r = m.r;
+    this->type = m.type;
+    this->v = m.v;
+    this->m = m.m;
+    this->f = m.f;
+    this->id = m.id;
+    this->i = m.i;
+    this->q = m.q;
+    this->p = m.p;
+    this->n = m.n;
+  }
+#endif
   ~Molecule(){};
 
   friend std::ostream &operator<<(std::ostream &s, const Molecule &m){

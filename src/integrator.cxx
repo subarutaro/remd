@@ -642,7 +642,7 @@ void Molecules::D6(){
 }
 
 template<int MODE>
-void Molecules::ExecuteStep(){
+void Molecules::ExecuteStep(const bool doSort,const double mergin){
     prof.beg(Profiler::Total);
     prof.beg(Profiler::Integ);
     prof.beg(Profiler::D6);
@@ -685,7 +685,7 @@ void Molecules::ExecuteStep(){
     prof.end(Profiler::SoAtoAoS);
 #endif
     prof.beg(Profiler::CalcForce);
-    CalcForcePot();
+    CalcForcePot(doSort,mergin);
     prof.end(Profiler::CalcForce);
 #ifdef ENABLE_AOS_TO_SOA_CONVERSION
     prof.beg(Profiler::AoStoSoA);
@@ -703,7 +703,7 @@ void Molecules::ExecuteStep(){
     prof.end(Profiler::Total);
 }
 
-void Molecules::ExecuteSteps(){
+void Molecules::ExecuteSteps(const int sort_interval,const double mergin){
   #pragma omp parallel
   {
 #ifdef ENABLE_AOS_TO_SOA_CONVERSION
@@ -724,65 +724,66 @@ void Molecules::ExecuteSteps(){
 	}
       }
       //printf("mode= %d %d %d\n",(mode>>TSHIFT)&MASK, (mode>>PSHIFT)&MASK, (mode>>CSHIFT)&MASK);
+      const bool doSort = s%sort_interval == 0;
       switch(mode){
       case NVE:
-	ExecuteStep<NVE>();break;
+	ExecuteStep<NVE>(doSort,mergin);break;
       case NVT:
-	ExecuteStep<NVT>();break;
+	ExecuteStep<NVT>(doSort,mergin);break;
       case NVTSCALE:
-	ExecuteStep<NVE>();break;
+	ExecuteStep<NVE>(doSort,mergin);break;
       case NPH:
-	ExecuteStep<NPH>();break;
+	ExecuteStep<NPH>(doSort,mergin);break;
       case NPT:
-	ExecuteStep<NPT>();break;
+	ExecuteStep<NPT>(doSort,mergin);break;
       case NAxyPzH:
-	ExecuteStep<NAxyPzH>();break;
+	ExecuteStep<NAxyPzH>(doSort,mergin);break;
       case NAxyPzT:
-	ExecuteStep<NAxyPzT>();break;
+	ExecuteStep<NAxyPzT>(doSort,mergin);break;
       case NPxyLzH:
-	ExecuteStep<NPxyLzH>();break;
+	ExecuteStep<NPxyLzH>(doSort,mergin);break;
       case NPxyLzT:
-	ExecuteStep<NPxyLzT>();break;
+	ExecuteStep<NPxyLzT>(doSort,mergin);break;
       case NVE1D:
-	ExecuteStep<NVE1D>();break;
+	ExecuteStep<NVE1D>(doSort,mergin);break;
       case NVT1D:
-	ExecuteStep<NVT1D>();break;
+	ExecuteStep<NVT1D>(doSort,mergin);break;
       case NVTSCALE1D:
-	ExecuteStep<NVE1D>();break;
+	ExecuteStep<NVE1D>(doSort,mergin);break;
       case NPH1D:
-	ExecuteStep<NPH1D>();break;
+	ExecuteStep<NPH1D>(doSort,mergin);break;
       case NPT1D:
-	ExecuteStep<NPT1D>();break;
+	ExecuteStep<NPT1D>(doSort,mergin);break;
       case NPTSCALE1D:
-	ExecuteStep<NPH1D>();break;
+	ExecuteStep<NPH1D>(doSort,mergin);break;
       case NAxyPzH1D:
-	ExecuteStep<NAxyPzH1D>();break;
+	ExecuteStep<NAxyPzH1D>(doSort,mergin);break;
       case NAxyPzT1D:
-	ExecuteStep<NAxyPzT1D>();break;
+	ExecuteStep<NAxyPzT1D>(doSort,mergin);break;
       case NAxyPzTSCALE1D:
-	ExecuteStep<NAxyPzH1D>();break;
+	ExecuteStep<NAxyPzH1D>(doSort,mergin);break;
       case NPxyLzH1D:
-	ExecuteStep<NPxyLzH1D>();break;
+	ExecuteStep<NPxyLzH1D>(doSort,mergin);break;
       case NPxyLzT1D:
-	ExecuteStep<NPxyLzT1D>();break;
+	ExecuteStep<NPxyLzT1D>(doSort,mergin);break;
       case NVE2D:
-	ExecuteStep<NVE2D>();break;
+	ExecuteStep<NVE2D>(doSort,mergin);break;
       case NVT2D:
-	ExecuteStep<NVT2D>();break;
+	ExecuteStep<NVT2D>(doSort,mergin);break;
       case NPH2D:
-	ExecuteStep<NPH2D>();break;
+	ExecuteStep<NPH2D>(doSort,mergin);break;
       case NPT2D:
-	ExecuteStep<NPT2D>();break;
+	ExecuteStep<NPT2D>(doSort,mergin);break;
       case NPTSCALE2D:
-	ExecuteStep<NPH2D>();break;
+	ExecuteStep<NPH2D>(doSort,mergin);break;
       case NAxyPzH2D:
-	ExecuteStep<NAxyPzH2D>();break;
+	ExecuteStep<NAxyPzH2D>(doSort,mergin);break;
       case NAxyPzT2D:
-	ExecuteStep<NAxyPzT2D>();break;
+	ExecuteStep<NAxyPzT2D>(doSort,mergin);break;
       case NPxyLzH2D:
-	ExecuteStep<NPxyLzH2D>();break;
+	ExecuteStep<NPxyLzH2D>(doSort,mergin);break;
       case NPxyLzT2D:
-	ExecuteStep<NPxyLzT2D>();break;
+	ExecuteStep<NPxyLzT2D>(doSort,mergin);break;
       defalut:
 	std::cerr << "error: undefined ensemble or confined dimention" << std::endl;
 	exit(EXIT_FAILURE);
