@@ -1,5 +1,6 @@
 #include "molecules.h"
 #include "force_calculator.h"
+#include "macro.h"
 
 ForceCalculator::ForceCalculator
 (double _rcut,double _kcut,double _alpha,int _nthreads)
@@ -893,7 +894,7 @@ void ForceCalculator::Switching(Molecule *m,Atom *a,const MolTypeList mtl,const 
   const FP dswy = dgy*(dsw*r01i);					\
   const FP dswz = dgz*(dsw*r01i);					\
   FP fx,fy,fz,e;							\
-  if constexpr (nsite == 3){						\
+  IF_CONSTEXPR (nsite == 3){						\
     fx = fy = fz = e = ZERO;						\
     KERNEL_LJ_CLMB(0,3*j+0);						\
     KERNEL_CLMB   (0,3*j+1);						\
@@ -934,7 +935,7 @@ void ForceCalculator::Switching(Molecule *m,Atom *a,const MolTypeList mtl,const 
     gvy_i += fy*dgy;							\
     gvz_i += fz*dgz;							\
   }									\
-  if constexpr (nsite == 4){						\
+  IF_CONSTEXPR (nsite == 4){						\
     fx = fy = fz = e = ZERO;						\
     KERNEL_LJ(0,j+0*offset);						\
     fx -= dswx*e;							\
@@ -986,7 +987,7 @@ void ForceCalculator::Switching(Molecule *m,Atom *a,const MolTypeList mtl,const 
     gvy_i += fy*dgy;							\
     gvz_i += fz*dgz;							\
   }									\
-  if constexpr (nsite == 5){						\
+  IF_CONSTEXPR (nsite == 5){						\
     fx = fy = fz = e = ZERO;						\
     KERNEL_LJ(0,5*j+0);							\
     fx -= dswx*e;							\
