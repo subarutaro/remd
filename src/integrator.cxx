@@ -1,5 +1,7 @@
 #include "molecules.h"
 #include "integrator.h"
+#include "macro.h"
+
 #ifdef ENABLE_AOS_TO_SOA_CONVERSION
 void Molecules::AoStoSoA(){
 #ifdef _OPENMP
@@ -218,14 +220,14 @@ inline void Molecules::D1(){
       pz[i] = pz[i]*cosxidt + Pp[2]*sinxidt;
       pw[i] = pw[i]*cosxidt + Pp[3]*sinxidt;
 
-      if constexpr (((MODE>>PSHIFT)&MASK)>0 || ((MODE>>TSHIFT)&MASK)==T_CONSTANT ){
+      IF_CONSTEXPR (((MODE>>PSHIFT)&MASK)>0 || ((MODE>>TSHIFT)&MASK)==T_CONSTANT ){
 	//sum_Pv += m.v*m.v*Li*Li*m.m;
 	const double m = 1.0 / mi[i];
 	sum_Pv[ii][0] += 2.0 * m * vx[i]*vx[i];
 	sum_Pv[ii][1] += 2.0 * m * vy[i]*vy[i];
 	sum_Pv[ii][2] += 2.0 * m * vz[i]*vz[i];
       }
-      if constexpr (((MODE>>TSHIFT)&MASK)==T_CONSTANT){
+      IF_CONSTEXPR (((MODE>>TSHIFT)&MASK)==T_CONSTANT){
 	sum_Ps[ii] += xi*xi*ix[i];
       }
     }
@@ -257,7 +259,7 @@ inline void Molecules::D1(){
     pz[i] = pz[i]*cosxidt + Pp[2]*sinxidt;
     pw[i] = pw[i]*cosxidt + Pp[3]*sinxidt;
 
-    if constexpr (((MODE>>PSHIFT)&MASK)>0 || ((MODE>>TSHIFT)&MASK)==T_CONSTANT ){
+    IF_CONSTEXPR (((MODE>>PSHIFT)&MASK)>0 || ((MODE>>TSHIFT)&MASK)==T_CONSTANT ){
       //sum_Pv += m.v*m.v*Li*Li*m.m;
       const double m = 1.0 / mi[i];
       const int ii = i%nlane;
@@ -265,7 +267,7 @@ inline void Molecules::D1(){
       sum_Pv_omp[nlane*thread+ii][1] += 2.0 * m * vy[i]*vy[i];
       sum_Pv_omp[nlane*thread+ii][2] += 2.0 * m * vz[i]*vz[i];
     }
-    if constexpr (((MODE>>TSHIFT)&MASK)==T_CONSTANT){
+    IF_CONSTEXPR (((MODE>>TSHIFT)&MASK)==T_CONSTANT){
       const int ii = i%nlane;
       sum_Ps_omp[nlane*thread+ii] += xi*xi*ix[i];
     }
@@ -495,14 +497,14 @@ inline void Molecules::D1(){
     m.p = m.p*cos(xidt) + Pp*sin(xidt);
     //update molecule
     //mlcl[i] = m;
-    if constexpr (((MODE>>PSHIFT)&MASK)>0 || ((MODE>>TSHIFT)&MASK)==T_CONSTANT){
+    IF_CONSTEXPR (((MODE>>PSHIFT)&MASK)>0 || ((MODE>>TSHIFT)&MASK)==T_CONSTANT){
       const int ii = i%nlane;
       //sum_Pv += m.v*m.v*Li*Li*m.m;
       sum_Pv_omp[nlane*thread+ii][0] += 2.0 * m.m * m.v[0]*m.v[0];
       sum_Pv_omp[nlane*thread+ii][1] += 2.0 * m.m * m.v[1]*m.v[1];
       sum_Pv_omp[nlane*thread+ii][2] += 2.0 * m.m * m.v[2]*m.v[2];
     }
-    if constexpr (((MODE>>TSHIFT)&MASK)==T_CONSTANT){
+    IF_CONSTEXPR (((MODE>>TSHIFT)&MASK)==T_CONSTANT){
       const int ii = i%nlane;
       sum_Ps_omp[nlane*thread+ii] += xi*xi*m.i[0];
     }
