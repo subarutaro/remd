@@ -84,12 +84,18 @@ REMD::REMD(std::string input){
 	md[i]->AngVelocityScaling();
       }
 
-      if(p.bstat_mass != 0.0){
-	md[i]->bst->W = p.bstat_mass;
-	md[i]->bst->flush();
-      }
-      if(p.tstat_mass != 0.0){
+      if(p.tstat_mass >= 0.0){
+#ifndef STEEPEST
+	assert(p.tstat_mass > 0.0);
+#endif
 	md[i]->tst->Q = p.tstat_mass;
+	md[i]->tst->flush();
+      }
+      if(p.tstat_mass >= 0.0){
+#ifndef STEEPEST
+        assert(p.tstat_mass > 0.0);
+#endif
+        md[i]->tst->Q = p.tstat_mass;
 	md[i]->tst->flush();
       }
       md[i]->InitializeProperty();

@@ -117,9 +117,9 @@ struct Parameter{
     rswitch = 8.0;
 
     tconstant  = 0;
-    tstat_mass = 0.0;
+    tstat_mass = -1.0;
     pconstant  = 0;
-    bstat_mass = 0.0;
+    bstat_mass = -1.0;
 
     temperature = 300.0;
     pressure    = 1.0;

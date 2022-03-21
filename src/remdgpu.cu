@@ -290,12 +290,22 @@ REMDGPU::REMDGPU(Molecules** mlcls, const unsigned int _nreplica){
 
     tst[rep].x = mlcls[rep]->tst->s;
     tst[rep].y = mlcls[rep]->tst->Ps;
+#ifdef STEEPEST
+    tst[rep].z = mlcls[rep]->tst->Q;
+#else
+    assert(mlcls[rep]->tst->Q > 0.0);
     tst[rep].z = 0.5f / mlcls[rep]->tst->Q;
+#endif
 
     bst[rep].x = mlcls[rep]->bst->Pv[0];
     bst[rep].y = mlcls[rep]->bst->Pv[1];
     bst[rep].z = mlcls[rep]->bst->Pv[2];
+#ifdef STEEPEST
+    bst[rep].w = mlcls[rep]->bst->W;
+#else
+    assert(mlcls[rep]->bst->W > 0.0);
     bst[rep].w = 0.5f / mlcls[rep]->bst->W;
+#endif
 
     L[rep].x = mlcls[rep]->L[0];
     L[rep].y = mlcls[rep]->L[1];
@@ -2478,8 +2488,8 @@ void remd_kernel
   for(unsigned long s=0;s<interval;s++){
 #ifdef STEEPEST
     const float dr   = dt;
-    const qtype dphi = 2.f / t.z;
-    const float dv   = 2.f / b.w / P;
+    const qtype dphi = t.z;
+    const float dv   = b.w;
     for(unsigned int i=tid;i<nmol;i+=bdm){
       r_rep[i].x += (int)( (float)IntMax * f_rep[i].x * dr);
       r_rep[i].y += (int)( (float)IntMax * f_rep[i].y * dr);
